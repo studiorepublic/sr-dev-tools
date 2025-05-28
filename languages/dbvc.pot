@@ -1,0 +1,130 @@
+# Copyright (C) 2025 Robert DeVore
+# This file is distributed under the same license as the DB Version Control plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: DB Version Control 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/robertdevore/db-version-control/\n"
+"POT-Creation-Date: 2025-05-28 10:30:00+00:00\n"
+"Last-Translator: Robert DeVore <me@robertdevore.com>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: admin/admin-menu.php:22
+msgid "DB Version Control"
+msgstr ""
+
+#: admin/admin-menu.php:23
+msgid "DBVC Export"
+msgstr ""
+
+#: admin/admin-page.php:21
+msgid "You do not have sufficient permissions to access this page."
+msgstr ""
+
+#: admin/admin-page.php:30
+msgid "You do not have sufficient permissions to perform this action."
+msgstr ""
+
+#: admin/admin-page.php:37
+msgid "Invalid sync path provided. Path cannot contain ../ or other unsafe characters."
+msgstr ""
+
+#: admin/admin-page.php:43
+msgid "Sync folder updated and created at: %s"
+msgstr ""
+
+#: admin/admin-page.php:45
+msgid "Sync folder setting saved, but could not create directory at: %s. Please check permissions."
+msgstr ""
+
+#: admin/admin-page.php:53
+msgid "You do not have sufficient permissions to perform this action."
+msgstr ""
+
+#: admin/admin-page.php:64
+msgid "Post types selection updated!"
+msgstr ""
+
+#: admin/admin-page.php:69
+msgid "You do not have sufficient permissions to perform this action."
+msgstr ""
+
+#: admin/admin-page.php:82
+msgid "Full export completed!"
+msgstr ""
+
+#: admin/admin-page.php:91
+msgid "DB Version Control"
+msgstr ""
+
+#: admin/admin-page.php:94
+msgid "This will export all posts, options, and menus to JSON files."
+msgstr ""
+
+#: admin/admin-page.php:95
+msgid "Run Full Export"
+msgstr ""
+
+#: admin/admin-page.php:101
+msgid "Post Types to Export/Import"
+msgstr ""
+
+#: admin/admin-page.php:102
+msgid "Select which post types should be included in exports and imports."
+msgstr ""
+
+#: admin/admin-page.php:109
+msgid "Save Post Types"
+msgstr ""
+
+#: admin/admin-page.php:115
+msgid "Custom Sync Folder Path"
+msgstr ""
+
+#: admin/admin-page.php:116
+msgid "Enter the full or relative path (from site root) where JSON files should be saved."
+msgstr ""
+
+#: admin/admin-page.php:117
+msgid "e.g., wp-content/plugins/db-version-control/sync-testing-folder/"
+msgstr ""
+
+#: admin/admin-page.php:118
+msgid "Current resolved path:"
+msgstr ""
+
+#: admin/admin-page.php:119
+msgid "Save Folder Path"
+msgstr ""
+
+#: admin/admin-page.php:125
+msgid "Select post types..."
+msgstr ""
+
+#: db-version-control.php:61
+msgid "Settings"
+msgstr ""
+
+#. Plugin Name of the plugin/theme
+msgid "DB Version Control"
+msgstr ""
+
+#. Plugin URI of the plugin/theme
+msgid "https://github.com/robertdevore/db-version-control/"
+msgstr ""
+
+#. Description of the plugin/theme
+msgid "Sync WordPress to version-controlled JSON files for easy Git workflows."
+msgstr ""
+
+#. Author of the plugin/theme
+msgid "Robert DeVore"
+msgstr ""
+
+#. Author URI of the plugin/theme
+msgid "https://robertdevore.com"
+msgstr ""
