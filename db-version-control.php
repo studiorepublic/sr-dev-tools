@@ -2,7 +2,7 @@
 /**
  * Plugin Name: DB Version Control
  * Description: Sync WordPress to version-controlled JSON files for easy Git workflows.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Robert DeVore
  * Author URI:  https://robertdevore.com
  * Text Domain: dbvc
@@ -41,7 +41,7 @@ new WPComPluginHandler( plugin_basename( __FILE__ ), 'https://robertdevore.com/w
 define( 'DBVC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'DBVC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DBVC_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
-define( 'DBVC_PLUGIN_VERSION', '1.0.0' );
+define( 'DBVC_PLUGIN_VERSION', '1.1.0' );
 
 require_once DBVC_PLUGIN_PATH . 'includes/functions.php';
 require_once DBVC_PLUGIN_PATH . 'includes/class-sync-posts.php';
