@@ -1,6 +1,6 @@
 <?php
 /**
- * Action hooks for DB Version Control
+ * Action hooks for DB Version Control 
  * 
  * @package   DB Version Control
  * @author    Robert DeVore <me@robertdevore.com>
@@ -252,6 +252,34 @@ function dbvc_handle_menu_item_deletion( $post_id ) {
     }
 }
 
+/**
+ * Handle FSE template and theme changes.
+ * 
+ * @since  1.1.0
+ * @return void
+ */
+function dbvc_handle_fse_changes() {
+	// Only run if WordPress is fully loaded and we're not in admin
+	if ( ! did_action( 'wp_loaded' ) || ( is_admin() && ! wp_doing_ajax() ) ) {
+		return;
+	}
+	
+	DBVC_Sync_Posts::export_fse_theme_data();
+	do_action( 'dbvc_after_fse_changes' );
+}
+
+/**
+ * Handle block pattern changes.
+ * 
+ * @since  1.1.0
+ * @return void
+ */
+function dbvc_handle_pattern_changes() {
+	// Patterns are typically stored in theme files, but custom ones in options
+	DBVC_Sync_Posts::export_options_to_json();
+	do_action( 'dbvc_after_pattern_changes' );
+}
+
 // Register all action hooks.
 add_action( 'before_delete_post', 'dbvc_handle_post_deletion', 10, 1 );
 add_action( 'transition_post_status', 'dbvc_handle_post_status_transition', 10, 3 );
@@ -276,3 +304,18 @@ add_action( 'wp_update_nav_menu', 'dbvc_handle_menu_updates', 10, 2 );
 add_action( 'save_post_nav_menu_item', 'dbvc_handle_menu_item_save', 10, 1 );
 add_action( 'delete_post', 'dbvc_handle_menu_item_deletion', 10, 1 );
 
+// FSE hooks - use safer, later hooks that don't interfere with admin loading
+add_action( 'wp_loaded', function() {
+	// Only add FSE hooks after WordPress is fully loaded
+	if ( wp_is_block_theme() ) {
+		add_action( 'save_post_wp_template', 'dbvc_handle_fse_changes', 10, 0 );
+		add_action( 'save_post_wp_template_part', 'dbvc_handle_fse_changes', 10, 0 );
+		add_action( 'save_post_wp_global_styles', 'dbvc_handle_fse_changes', 10, 0 );
+		add_action( 'save_post_wp_navigation', 'dbvc_handle_fse_changes', 10, 0 );
+		
+		// Hook into theme switching, but only on frontend or during WP-CLI
+		if ( ! is_admin() || defined( 'WP_CLI' ) ) {
+			add_action( 'switch_theme', 'dbvc_handle_fse_changes', 10, 0 );
+		}
+	}
+}, 20 );

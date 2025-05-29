@@ -1,7 +1,7 @@
 <?php
 /**
  * Get the sync path for exports
- * 
+ *  
  * @package   DB Version Control
  * @author    Robert DeVore <me@robertdevore.com
  * @since     1.0.0
@@ -31,26 +31,46 @@ class DBVC_Sync_Posts {
 	public static function get_supported_post_types() {
 		$selected_types = get_option( 'dbvc_post_types', [] );
 
-		// If no post types are selected, default to post and page.
+		// If no post types are selected, default to post, page, and FSE types.
 		if ( empty( $selected_types ) ) {
-			$selected_types = [ 'post', 'page' ];
+			$selected_types = [ 'post', 'page', 'wp_template', 'wp_template_part', 'wp_global_styles', 'wp_navigation' ];
 		}
 
 		// Allow other plugins to modify supported post types.
 		return apply_filters( 'dbvc_supported_post_types', $selected_types );
 	}
 
+    /**
+     * Export a single post to JSON file.
+     * 
+     * @param int    $post_id Post ID.
+     * @param object $post    Post object.
+     * 
+     * @since  1.0.0
+     * @return void
+     */
 	public static function export_post_to_json( $post_id, $post ) {
-		// Validate inputs
+		// Validate inputs.
 		if ( ! is_numeric( $post_id ) || $post_id <= 0 ) {
 			return;
 		}
-		
+
 		if ( ! is_object( $post ) || ! isset( $post->post_type ) ) {
 			return;
 		}
-		
-		if ( wp_is_post_revision( $post_id ) || $post->post_status !== 'publish' ) {
+
+		if ( wp_is_post_revision( $post_id ) ) {
+			return;
+		}
+
+		// For FSE content, allow draft status as templates can be in draft.
+		$allowed_statuses = [ 'publish' ];
+		if ( in_array( $post->post_type, [ 'wp_template', 'wp_template_part', 'wp_global_styles', 'wp_navigation' ], true ) ) {
+			$allowed_statuses[] = 'draft';
+			$allowed_statuses[] = 'auto-draft';
+		}
+
+		if ( ! in_array( $post->post_status, $allowed_statuses, true ) ) {
 			return;
 		}
 
@@ -59,7 +79,7 @@ class DBVC_Sync_Posts {
 			return;
 		}
 
-		// Check if user has permission to read this post type (skip for WP-CLI)
+		// Check if user has permission to read this post type (skip for WP-CLI).
 		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 			$post_type_obj = get_post_type_object( $post->post_type );
 			if ( ! $post_type_obj || ! current_user_can( $post_type_obj->cap->read_post, $post_id ) ) {
@@ -74,8 +94,16 @@ class DBVC_Sync_Posts {
 			'post_excerpt' => sanitize_textarea_field( $post->post_excerpt ),
 			'post_type'    => sanitize_text_field( $post->post_type ),
 			'post_status'  => sanitize_text_field( $post->post_status ),
+			'post_name'    => sanitize_text_field( $post->post_name ),
 			'meta'         => self::sanitize_post_meta( get_post_meta( $post_id ) ),
 		];
+
+		// Add FSE-specific data.
+		if ( in_array( $post->post_type, [ 'wp_template', 'wp_template_part' ], true ) ) {
+			$data['theme']  = get_stylesheet();
+			$data['slug']   = $post->post_name;
+			$data['source'] = get_post_meta( $post_id, 'origin', true ) ?: 'custom';
+		}
 
 		// Allow other plugins to modify the export data
 		$data = apply_filters( 'dbvc_export_post_data', $data, $post_id, $post );
@@ -516,4 +544,130 @@ class DBVC_Sync_Posts {
         return $total;
     }
 
+    /**
+     * Export FSE theme data to JSON.
+     * 
+     * @since  1.1.0
+     * @return void
+     */
+	public static function export_fse_theme_data() {
+		// Check if WordPress is fully loaded.
+		if ( ! did_action( 'wp_loaded' ) ) {
+			return;
+		}
+
+		if ( ! wp_is_block_theme() ) {
+			return;
+		}
+
+		// Skip during admin page loads to prevent conflicts.
+		if ( is_admin() && ! wp_doing_ajax() && ! defined( 'WP_CLI' ) ) {
+			return;
+		}
+
+		// Check user capabilities for FSE export (skip for WP-CLI).
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+			if ( ! current_user_can( 'edit_theme_options' ) ) {
+				return;
+			}
+		}
+
+		$theme_data = [
+			'theme_name' => get_stylesheet(),
+			'custom_css' => wp_get_custom_css(),
+		];
+
+		// Safely get theme JSON data - only if the system is ready.
+		if ( class_exists( 'WP_Theme_JSON_Resolver' ) ) {
+			try {
+				// Additional check to ensure the theme JSON system is initialized.
+				if ( did_action( 'init' ) && ! is_admin() ) {
+					$theme_json_resolver = WP_Theme_JSON_Resolver::get_merged_data();
+					if ( $theme_json_resolver && method_exists( $theme_json_resolver, 'get_raw_data' ) ) {
+						$theme_data['theme_json'] = $theme_json_resolver->get_raw_data();
+					} else {
+						$theme_data['theme_json'] = [];
+					}
+				} else {
+					// Skip theme JSON during admin loads.
+					$theme_data['theme_json'] = [];
+				}
+			} catch ( Exception $e ) {
+				error_log( 'DBVC: Failed to get theme JSON data: ' . $e->getMessage() );
+				$theme_data['theme_json'] = [];
+			} catch ( Error $e ) {
+				error_log( 'DBVC: Fatal error getting theme JSON data: ' . $e->getMessage() );
+				$theme_data['theme_json'] = [];
+			}
+		} else {
+			$theme_data['theme_json'] = [];
+		}
+
+		// Allow other plugins to modify FSE theme data.
+		$theme_data = apply_filters( 'dbvc_export_fse_theme_data', $theme_data );
+
+		$path = dbvc_get_sync_path( 'theme' );
+		if ( ! is_dir( $path ) ) {
+			if ( ! wp_mkdir_p( $path ) ) {
+				error_log( 'DBVC: Failed to create theme directory: ' . $path );
+				return;
+			}
+		}
+
+		$file_path = $path . 'theme-data.json';
+		
+		// Allow other plugins to modify the FSE theme file path.
+		$file_path = apply_filters( 'dbvc_export_fse_theme_file_path', $file_path );
+		
+		// Validate file path.
+		if ( ! dbvc_is_safe_file_path( $file_path ) ) {
+			error_log( 'DBVC: Unsafe file path detected: ' . $file_path );
+			return;
+		}
+
+		$json_content = wp_json_encode( $theme_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+		if ( false === $json_content ) {
+			error_log( 'DBVC: Failed to encode FSE theme JSON' );
+			return;
+		}
+
+		$result = file_put_contents( $file_path, $json_content );
+		if ( false === $result ) {
+			error_log( 'DBVC: Failed to write FSE theme file: ' . $file_path );
+			return;
+		}
+
+		do_action( 'dbvc_after_export_fse_theme_data', $file_path, $theme_data );
+	}
+
+	/**
+	 * Import FSE theme data from JSON.
+	 * 
+	 * @since  1.1.0
+	 * @return void
+	 */
+	public static function import_fse_theme_data() {
+		// Check user capabilities for FSE import.
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			return;
+		}
+
+		$file_path = dbvc_get_sync_path( 'theme' ) . 'theme-data.json';
+		if ( ! file_exists( $file_path ) ) {
+			return;
+		}
+
+		$theme_data = json_decode( file_get_contents( $file_path ), true );
+		if ( empty( $theme_data ) ) {
+			return;
+		}
+
+		// Import custom CSS.
+		if ( isset( $theme_data['custom_css'] ) && ! empty( $theme_data['custom_css'] ) ) {
+			wp_update_custom_css_post( $theme_data['custom_css'] );
+		}
+
+		// Allow other plugins to handle additional FSE import data.
+		do_action( 'dbvc_after_import_fse_theme_data', $theme_data );
+	}
 }
