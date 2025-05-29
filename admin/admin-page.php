@@ -105,7 +105,7 @@ function dbvc_render_export_page() {
 	$resolved_path = dbvc_get_sync_path();
 	
 	// Get all public post types.
-	$all_post_types = get_post_types( [ 'public' => true ], 'objects' );
+	$all_post_types = dbvc_get_available_post_types();
 
 	?>
 	<div class="wrap">
@@ -153,4 +153,40 @@ function dbvc_render_export_page() {
 	});
 	</script>
 	<?php
+}
+
+/**
+ * Get all available post types for the settings page.
+ * 
+ * @since  1.1.0
+ * @return array
+ */
+function dbvc_get_available_post_types() {
+    $post_types = get_post_types( [ 'public' => true ], 'objects' );
+    
+    // Add FSE post types if block theme is active
+    if ( wp_is_block_theme() ) {
+        $fse_types = [
+            'wp_template' => (object) [
+                'labels' => (object) [ 'name' => __( 'Templates (FSE)', 'dbvc' ) ],
+                'name' => 'wp_template'
+            ],
+            'wp_template_part' => (object) [
+                'labels' => (object) [ 'name' => __( 'Template Parts (FSE)', 'dbvc' ) ],
+                'name' => 'wp_template_part'
+            ],
+            'wp_global_styles' => (object) [
+                'labels' => (object) [ 'name' => __( 'Global Styles (FSE)', 'dbvc' ) ],
+                'name' => 'wp_global_styles'
+            ],
+            'wp_navigation' => (object) [
+                'labels' => (object) [ 'name' => __( 'Navigation (FSE)', 'dbvc' ) ],
+                'name' => 'wp_navigation'
+            ],
+        ];
+        
+        $post_types = array_merge( $post_types, $fse_types );
+    }
+    
+    return $post_types;
 }
