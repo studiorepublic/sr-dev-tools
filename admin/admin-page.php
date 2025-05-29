@@ -67,8 +67,16 @@ function dbvc_render_export_page() {
 		if ( isset( $_POST['dbvc_post_types'] ) && is_array( $_POST['dbvc_post_types'] ) ) {
 			$new_post_types = array_map( 'sanitize_text_field', wp_unslash( $_POST['dbvc_post_types'] ) );
 			
-			// Validate post types exist
+			// Get all valid post types (public + FSE types)
 			$valid_post_types = get_post_types( [ 'public' => true ] );
+			
+			// Add FSE post types to valid list if block theme is active
+			if ( wp_is_block_theme() ) {
+				$fse_types = [ 'wp_template', 'wp_template_part', 'wp_global_styles', 'wp_navigation' ];
+				$valid_post_types = array_merge( $valid_post_types, array_combine( $fse_types, $fse_types ) );
+			}
+			
+			// Filter to only include valid post types
 			$new_post_types = array_intersect( $new_post_types, array_keys( $valid_post_types ) );
 		}
 		
@@ -168,19 +176,19 @@ function dbvc_get_available_post_types() {
     if ( wp_is_block_theme() ) {
         $fse_types = [
             'wp_template' => (object) [
-                'labels' => (object) [ 'name' => __( 'Templates (FSE)', 'dbvc' ) ],
+                'label' => __( 'Templates (FSE)', 'dbvc' ),
                 'name' => 'wp_template'
             ],
             'wp_template_part' => (object) [
-                'labels' => (object) [ 'name' => __( 'Template Parts (FSE)', 'dbvc' ) ],
+                'label' => __( 'Template Parts (FSE)', 'dbvc' ),
                 'name' => 'wp_template_part'
             ],
             'wp_global_styles' => (object) [
-                'labels' => (object) [ 'name' => __( 'Global Styles (FSE)', 'dbvc' ) ],
+                'label' => __( 'Global Styles (FSE)', 'dbvc' ),
                 'name' => 'wp_global_styles'
             ],
             'wp_navigation' => (object) [
-                'labels' => (object) [ 'name' => __( 'Navigation (FSE)', 'dbvc' ) ],
+                'label' => __( 'Navigation (FSE)', 'dbvc' ),
                 'name' => 'wp_navigation'
             ],
         ];
