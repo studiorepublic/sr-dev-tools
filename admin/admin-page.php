@@ -109,9 +109,36 @@ function dbvc_render_export_page() {
 		echo '<div class="notice notice-success"><p>' . esc_html__( 'Full export completed!', 'dbvc' ) . '</p></div>';
 	}
 
+	// Handle Generate Modules Pages form.
+	if ( isset( $_POST['dbvc_generate_modules'] ) && isset( $_POST['dbvc_generate_modules_nonce'] ) && wp_verify_nonce( $_POST['dbvc_generate_modules_nonce'], 'dbvc_generate_modules_action' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'dbvc' ) );
+		}
+		$gen_results = dbvc_generate_modules_pages();
+		if ( isset( $gen_results['error'] ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html( $gen_results['error'] ) . '</p></div>';
+		} else {
+			$created = isset( $gen_results['created'] ) ? count( (array) $gen_results['created'] ) : 0;
+			$skipped = isset( $gen_results['skipped'] ) ? count( (array) $gen_results['skipped'] ) : 0;
+			$errors  = isset( $gen_results['errors'] ) ? count( (array) $gen_results['errors'] ) : 0;
+			$modules_created = ! empty( $gen_results['modules_page_created'] );
+			$summary  = $modules_created ? __( 'Modules page created. ', 'dbvc' ) : __( 'Modules page already existed. ', 'dbvc' );
+			$summary .= sprintf( __( 'Pages created: %d. Skipped: %d. Errors: %d.', 'dbvc' ), $created, $skipped, $errors );
+			echo '<div class="notice notice-success"><p>' . esc_html( $summary ) . '</p></div>';
+			if ( ! empty( $gen_results['errors'] ) ) {
+				$errs = '<ul style="margin: .5em 0 0 1.2em;">';
+				foreach ( $gen_results['errors'] as $err ) {
+					$errs .= '<li>' . esc_html( $err ) . '</li>';
+				}
+				$errs .= '</ul>';
+				echo '<div class="notice notice-warning"><p>' . esc_html__( 'Some issues occurred:', 'dbvc' ) . '</p>' . $errs . '</div>';
+			}
+		}
+	}
+
 	// Get the current resolved path for display.
 	$resolved_path = dbvc_get_sync_path();
-	
+		
 	// Get all public post types.
 	$all_post_types = dbvc_get_available_post_types();
 
@@ -150,7 +177,16 @@ function dbvc_render_export_page() {
             <p><strong><?php esc_html_e( 'Current resolved path:', 'dbvc' ); ?></strong> <code><?php echo esc_html( $resolved_path ); ?></code></p>
             <?php submit_button( esc_html__( 'Save Folder Path', 'dbvc' ), 'secondary', 'dbvc_sync_path_save' ); ?>
         </form>
-	</div>
+
+        <hr />
+
+        <form method="post">
+            <?php wp_nonce_field( 'dbvc_generate_modules_action', 'dbvc_generate_modules_nonce' ); ?>
+            <h2><?php esc_html_e( 'Modules Pages', 'dbvc' ); ?></h2>
+            <p><?php esc_html_e( 'Scan theme ACF field groups for fields starting with "Partial" and generate child pages under the "Modules" parent.', 'dbvc' ); ?></p>
+            <?php submit_button( esc_html__( 'Generate modules pages', 'dbvc' ), 'secondary', 'dbvc_generate_modules' ); ?>
+        </form>
+    </div>
 
 	<script>
 	jQuery(document).ready(function($) {
