@@ -2,13 +2,13 @@
 /**
  * Plugin Name: DB Version Control
  * Description: Sync WordPress to version-controlled JSON files for easy Git workflows.
- * Version:     1.1.0
- * Author:      Robert DeVore
- * Author URI:  https://robertdevore.com
+ * Version:     1.2.0
+ * Author:      Studio Republic (based on original plugin by Robert DeVore
+ * Author URI:  https://www.studiorepublic.com
  * Text Domain: dbvc
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.txt
- * Update URI:  https://github.com/robertdevore/db-version-control/
+ * Update URI:  https://github.com/studiorepublic/db-version-control/
  */
 
 // If this file is called directly, abort.
@@ -20,7 +20,7 @@ require 'vendor/plugin-update-checker/plugin-update-checker.php';
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
 $myUpdateChecker = PucFactory::buildUpdateChecker(
-	'https://github.com/robertdevore/db-version-control/',
+	'https://github.com/studiorepublic/db-version-control/',
 	__FILE__,
 	'db-version-control'
 );

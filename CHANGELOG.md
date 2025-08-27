@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.2.0
+
+- **Added**: Option to create module pages
+- 
 ## 1.1.0
 
 - **Added**: Full Site Editing (FSE) integration with theme data export/import functionality in `includes/class-sync-posts.php`

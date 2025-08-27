@@ -33,6 +33,10 @@ Instead of wrestling with database dumps or complex migration tools, this plugin
 - **Manual Exports**: On-demand exports through the admin interface
 - **Selective Imports**: Import specific content types as needed
 
+### Create module pages
+
+- **Module Page Creation**: Easily create module pages directly from the plugin interface
+
 ### Enterprise Ready
 
 - **Security First**: CSRF protection, capability checks, and input sanitization
