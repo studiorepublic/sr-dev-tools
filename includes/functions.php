@@ -208,7 +208,6 @@ function dbvc_generate_modules_pages() {
 	}
 
 	$modules_id = $results['modules_page_id'];
-
 	// 2) Gather Partial* field names from theme acf-json
 	$acf_dir = trailingslashit( get_stylesheet_directory() ) . 'acf-json';
 	if ( ! is_dir( $acf_dir ) ) {

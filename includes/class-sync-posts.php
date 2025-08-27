@@ -88,7 +88,7 @@ class DBVC_Sync_Posts {
 		}
 
 		$data = [
-			'ID'           => absint( $post_id ),
+			'ID'           => absint( $post_id ), // kept for backward compatibility, not used as identifier during import
 			'post_title'   => sanitize_text_field( $post->post_title ),
 			'post_content' => wp_kses_post( $post->post_content ),
 			'post_excerpt' => sanitize_textarea_field( $post->post_excerpt ),
@@ -97,6 +97,19 @@ class DBVC_Sync_Posts {
 			'post_name'    => sanitize_text_field( $post->post_name ),
 			'meta'         => self::sanitize_post_meta( get_post_meta( $post_id ) ),
 		];
+
+		// Provide slug-based path information for hierarchical post types (e.g., pages).
+		if ( is_post_type_hierarchical( $post->post_type ) ) {
+			// Full path like "parent/child". get_page_uri works for hierarchical types.
+			$data['post_path'] = get_page_uri( $post_id );
+			if ( ! empty( $post->post_parent ) ) {
+				$parent = get_post( $post->post_parent );
+				if ( $parent && ! is_wp_error( $parent ) ) {
+					$data['parent_slug'] = sanitize_text_field( $parent->post_name );
+					$data['parent_path'] = get_page_uri( $parent->ID );
+				}
+			}
+		}
 
 		// Add FSE-specific data.
 		if ( in_array( $post->post_type, [ 'wp_template', 'wp_template_part' ], true ) ) {
@@ -170,19 +183,67 @@ class DBVC_Sync_Posts {
                     continue;
                 }
 
-                $post_id = wp_insert_post( [
-                    'ID'           => $json['ID'],
-                    'post_title'   => $json['post_title'],
-                    'post_content' => $json['post_content'],
-                    'post_excerpt' => $json['post_excerpt'],
-                    'post_type'    => $json['post_type'],
-                    'post_status'  => $json['post_status'],
-                ] );
+                // Validate required fields (use slug/path instead of ID)
+                if ( ! isset( $json['post_type'] ) ) {
+                    continue;
+                }
+
+                $post_type = sanitize_text_field( $json['post_type'] );
+                $title     = isset( $json['post_title'] ) ? sanitize_text_field( $json['post_title'] ) : '';
+                $slug      = isset( $json['post_name'] ) ? sanitize_title( $json['post_name'] ) : sanitize_title( $title );
+                $post_stat = isset( $json['post_status'] ) ? sanitize_text_field( $json['post_status'] ) : 'draft';
+
+                $existing  = null;
+                $parent_id = 0;
+
+                // Resolve parent and find existing post by path/slug if hierarchical
+                if ( is_post_type_hierarchical( $post_type ) ) {
+                    $post_path   = isset( $json['post_path'] ) ? sanitize_text_field( $json['post_path'] ) : $slug;
+                    $existing    = get_page_by_path( $post_path, OBJECT, $post_type );
+                    $parent_path = isset( $json['parent_path'] ) ? sanitize_text_field( $json['parent_path'] ) : '';
+                    $parent_slug = isset( $json['parent_slug'] ) ? sanitize_title( $json['parent_slug'] ) : '';
+                    if ( $parent_path ) {
+                        $parent = get_page_by_path( $parent_path, OBJECT, $post_type );
+                        if ( $parent ) { $parent_id = $parent->ID; }
+                    } elseif ( $parent_slug ) {
+                        $parent = get_page_by_path( $parent_slug, OBJECT, $post_type );
+                        if ( $parent ) { $parent_id = $parent->ID; }
+                    }
+                } else {
+                    // Non-hierarchical: lookup by slug within post type
+                    if ( $slug ) {
+                        $existing = get_page_by_path( $slug, OBJECT, $post_type );
+                        if ( ! $existing ) {
+                            $q = new WP_Query( [
+                                'name'           => $slug,
+                                'post_type'      => $post_type,
+                                'posts_per_page' => 1,
+                                'post_status'    => 'any',
+                            ] );
+                            if ( $q->have_posts() ) { $existing = $q->posts[0]; }
+                        }
+                    }
+                }
+
+                $postarr = [
+                    'post_title'   => $title,
+                    'post_name'    => $slug,
+                    'post_content' => wp_kses_post( $json['post_content'] ?? '' ),
+                    'post_excerpt' => sanitize_textarea_field( $json['post_excerpt'] ?? '' ),
+                    'post_type'    => $post_type,
+                    'post_status'  => $post_stat,
+                    'post_parent'  => $parent_id,
+                ];
+                if ( $existing && isset( $existing->ID ) ) {
+                    $postarr['ID'] = absint( $existing->ID );
+                }
+
+                $post_id = wp_insert_post( $postarr );
 
                 if ( ! is_wp_error( $post_id ) && isset( $json['meta'] ) ) {
                     foreach ( $json['meta'] as $key => $values ) {
                         foreach ( $values as $value ) {
-                            update_post_meta( $post_id, $key, maybe_unserialize( $value ) );
+                            update_post_meta( $post_id, sanitize_text_field( $key ), maybe_unserialize( $value ) );
                         }
                     }
                 }
@@ -483,31 +544,74 @@ class DBVC_Sync_Posts {
                 continue;
             }
             
-            // Validate required fields
-            if ( ! isset( $json['ID'], $json['post_type'], $json['post_title'] ) ) {
-                continue;
-            }
-            
-            $post_id = wp_insert_post( [
-                'ID'           => absint( $json['ID'] ),
-                'post_title'   => sanitize_text_field( $json['post_title'] ),
-                'post_content' => wp_kses_post( $json['post_content'] ?? '' ),
-                'post_excerpt' => sanitize_textarea_field( $json['post_excerpt'] ?? '' ),
-                'post_type'    => sanitize_text_field( $json['post_type'] ),
-                'post_status'  => sanitize_text_field( $json['post_status'] ?? 'draft' ),
-            ] );
-            
-            if ( ! is_wp_error( $post_id ) && isset( $json['meta'] ) && is_array( $json['meta'] ) ) {
-                foreach ( $json['meta'] as $key => $values ) {
-                    if ( is_array( $values ) ) {
-                        foreach ( $values as $value ) {
-                            update_post_meta( $post_id, sanitize_text_field( $key ), maybe_unserialize( $value ) );
-                        }
-                    }
-                }
-            }
-            
-            $processed++;
+         			// Validate required fields (use slug/path instead of ID)
+         			if ( ! isset( $json['post_type'] ) ) {
+         				continue;
+         			}
+			
+         			$post_type = sanitize_text_field( $json['post_type'] );
+         			$title     = isset( $json['post_title'] ) ? sanitize_text_field( $json['post_title'] ) : '';
+         			$slug      = isset( $json['post_name'] ) ? sanitize_title( $json['post_name'] ) : sanitize_title( $title );
+         			$post_stat = isset( $json['post_status'] ) ? sanitize_text_field( $json['post_status'] ) : 'draft';
+			
+         			$existing  = null;
+         			$parent_id = 0;
+			
+         			// Resolve parent and find existing post by path/slug if hierarchical
+         			if ( is_post_type_hierarchical( $post_type ) ) {
+         				$post_path   = isset( $json['post_path'] ) ? sanitize_text_field( $json['post_path'] ) : $slug;
+         				$existing    = get_page_by_path( $post_path, OBJECT, $post_type );
+         				$parent_path = isset( $json['parent_path'] ) ? sanitize_text_field( $json['parent_path'] ) : '';
+         				$parent_slug = isset( $json['parent_slug'] ) ? sanitize_title( $json['parent_slug'] ) : '';
+         				if ( $parent_path ) {
+         					$parent = get_page_by_path( $parent_path, OBJECT, $post_type );
+         					if ( $parent ) { $parent_id = $parent->ID; }
+         				} elseif ( $parent_slug ) {
+         					$parent = get_page_by_path( $parent_slug, OBJECT, $post_type );
+         					if ( $parent ) { $parent_id = $parent->ID; }
+         				}
+         			} else {
+         				// Non-hierarchical: lookup by slug within post type
+         				if ( $slug ) {
+         					$existing = get_page_by_path( $slug, OBJECT, $post_type );
+         					if ( ! $existing ) {
+         						$q = new WP_Query( [
+         							'name'           => $slug,
+         							'post_type'      => $post_type,
+         							'posts_per_page' => 1,
+         							'post_status'    => 'any',
+         						] );
+         						if ( $q->have_posts() ) { $existing = $q->posts[0]; }
+         					}
+         				}
+         			}
+			
+         			$postarr = [
+         				'post_title'   => $title,
+         				'post_name'    => $slug,
+         				'post_content' => wp_kses_post( $json['post_content'] ?? '' ),
+         				'post_excerpt' => sanitize_textarea_field( $json['post_excerpt'] ?? '' ),
+         				'post_type'    => $post_type,
+         				'post_status'  => $post_stat,
+         				'post_parent'  => $parent_id,
+         			];
+         			if ( $existing && isset( $existing->ID ) ) {
+         				$postarr['ID'] = absint( $existing->ID );
+         			}
+			
+         			$post_id = wp_insert_post( $postarr );
+			
+         			if ( ! is_wp_error( $post_id ) && isset( $json['meta'] ) && is_array( $json['meta'] ) ) {
+         				foreach ( $json['meta'] as $key => $values ) {
+         					if ( is_array( $values ) ) {
+         						foreach ( $values as $value ) {
+         							update_post_meta( $post_id, sanitize_text_field( $key ), maybe_unserialize( $value ) );
+         						}
+         					}
+         				}
+         			}
+			
+         			$processed++;
         }
         
         $total_files = count( $all_files );
