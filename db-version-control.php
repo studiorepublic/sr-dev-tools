@@ -2,7 +2,7 @@
 /**
  * Plugin Name: DB Version Control
  * Description: Sync WordPress to version-controlled JSON files for easy Git workflows.
- * Version:     1.2.0
+ * Version:     1.3.0
  * Author:      Studio Republic (based on original plugin by Robert DeVore
  * Author URI:  https://www.studiorepublic.com
  * Text Domain: dbvc

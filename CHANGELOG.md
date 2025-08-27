@@ -1,5 +1,12 @@
 # CHANGELOG
 
+
+## 1.3.0
+
+- Changed: Import now uses post slugs (and paths for hierarchical post types) as unique identifiers instead of IDs
+- Added: Export includes post_path and parent_path/parent_slug to preserve hierarchy on import
+- Improved: Import respects parent page when updating/creating pages by resolving parent via slug/path
+
 ## 1.2.0
 
 - **Added**: Option to create module pages
