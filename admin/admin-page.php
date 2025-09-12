@@ -282,7 +282,7 @@ function srdt_render_export_page() {
             <?php wp_nonce_field( 'srdt_sync_path_action', 'srdt_sync_path_nonce' ); ?>
             <h2><?php esc_html_e( 'Custom Sync Folder Path', 'srdt' ); ?></h2>
             <p><label for="srdt_sync_path"><?php esc_html_e( 'Enter the full or relative path (from site root) where JSON files should be saved.', 'srdt' ); ?></label></p>
-            <input type="text" name="srdt_sync_path" value="<?php echo esc_attr( $custom_path ); ?>" style="width: 100%;" placeholder="<?php esc_attr_e( 'e.g., wp-content/plugins/db-version-control/sync-testing-folder/', 'srdt' ); ?>">
+            <input type="text" name="srdt_sync_path" id="srdt_sync_path" value="<?php echo esc_attr( $custom_path ); ?>" style="width: 100%;" placeholder="<?php esc_attr_e( 'e.g., wp-content/plugins/db-version-control/sync-testing-folder/', 'srdt' ); ?>">
             <p><strong><?php esc_html_e( 'Current resolved path:', 'srdt' ); ?></strong> <code><?php echo esc_html( $resolved_path ); ?></code></p>
             <?php submit_button( esc_html__( 'Save Folder Path', 'srdt' ), 'secondary', 'srdt_sync_path_save' ); ?>
         </form>
