@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.4.1
+
+- Better zip file handling
+
 ## 1.4.0
 
 - Added: functionality to export plugins as zip files and to dump/import database

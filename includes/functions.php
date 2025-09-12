@@ -29,9 +29,14 @@ function srdt_get_sync_path( $subfolder = '' ) {
 			// Fall back to default if invalid
 			$base_path = trailingslashit( get_stylesheet_directory() ) . 'sync/';
 		} else {
-			// Remove leading slash and treat as relative to ABSPATH
-			$custom_path = ltrim( $custom_path, '/' );
-			$base_path = trailingslashit( ABSPATH ) . $custom_path;
+			// Use absolute path as-is; relative paths are treated as under ABSPATH
+			$is_absolute = ( isset( $custom_path[0] ) && $custom_path[0] === '/' ) || preg_match( '#^[A-Za-z]:/#', $custom_path );
+			if ( $is_absolute ) {
+				$base_path = $custom_path;
+			} else {
+				$custom_path = ltrim( $custom_path, '/' );
+				$base_path   = trailingslashit( ABSPATH ) . $custom_path;
+			}
 		}
 	} else {
 		// Default to current theme's sync folder
@@ -62,8 +67,8 @@ function srdt_validate_sync_path( $path ) {
 		return '';
 	}
 	
-	// Remove any null bytes
-	$path = str_replace( chr( 0 ), '', $path );
+	// Remove any null bytes and trim whitespace
+	$path = trim( str_replace( chr( 0 ), '', $path ) );
 	
 	// Check for directory traversal attempts
 	if ( strpos( $path, '..' ) !== false ) {
@@ -84,7 +89,22 @@ function srdt_validate_sync_path( $path ) {
 	// Remove any double slashes
 	$path = preg_replace( '#/+#', '/', $path );
 	
-	// Ensure path is within allowed boundaries (wp-content or plugin directory)
+	// Prepare normalized ABSPATH for checks
+	$abs_root = str_replace( '\\', '/', ABSPATH );
+	$abs_root = rtrim( $abs_root, '/' ) . '/';
+	
+	// Detect if absolute path (POSIX or Windows drive letter)
+	$is_absolute = ( isset( $path[0] ) && $path[0] === '/' ) || preg_match( '#^[A-Za-z]:/#', $path );
+	
+	if ( $is_absolute ) {
+		// Allow absolute paths only if inside the WordPress installation directory
+		if ( strpos( $path, $abs_root ) !== 0 ) {
+			return false;
+		}
+		return $path;
+	}
+	
+	// Relative path checks: allow only within common wp-content subdirectories
 	$allowed_prefixes = [
 		'wp-content/',
 		'wp-content/plugins/',
@@ -92,20 +112,19 @@ function srdt_validate_sync_path( $path ) {
 		'wp-content/themes/',
 	];
 	
-	$is_allowed = false;
+	$rel = ltrim( $path, '/' );
 	foreach ( $allowed_prefixes as $prefix ) {
-		if ( strpos( ltrim( $path, '/' ), $prefix ) === 0 ) {
-			$is_allowed = true;
-			break;
+		if ( strpos( $rel, $prefix ) === 0 ) {
+			return $path;
 		}
 	}
 	
-	// Also allow relative paths within the plugin directory
-	if ( ! $is_allowed && strpos( $path, '/' ) !== 0 ) {
-		$is_allowed = true;
+	// As a fallback, permit plain relative paths without leading slash
+	if ( strpos( $path, '/' ) !== 0 ) {
+		return $path;
 	}
 	
-	return $is_allowed ? $path : false;
+	return false;
 }
 
 /**
