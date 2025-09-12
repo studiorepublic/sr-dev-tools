@@ -143,8 +143,14 @@ function srdt_is_safe_file_path( $file_path ) {
 		return false;
 	}
 
+	// Validate the file path for directory traversal and other issues
+	$validated_path = srdt_validate_sync_path( $file_path );
+	if ( false === $validated_path ) {
+		return false;
+	}
+
 	// Determine target directory for the file
-	$dir = dirname( $file_path );
+	$dir = dirname( $validated_path );
 	if ( ! is_dir( $dir ) ) {
 		// Attempt to create the directory tree so we can place .htaccess
 		if ( function_exists( 'wp_mkdir_p' ) ) {
