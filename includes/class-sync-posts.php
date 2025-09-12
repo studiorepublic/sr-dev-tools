@@ -841,19 +841,28 @@ class SRDT_Sync_Posts {
 				}
 
 				if ( function_exists( 'exec' ) && $mysqldump_available ) {
-					$cmd  = 'mysqldump --single-transaction --quick --lock-tables=false';
-					$cmd .= ' -h ' . escapeshellarg( $host );
-					if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
-					if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
-					$cmd .= ' -u ' . escapeshellarg( DB_USER );
+					// Create a temporary MySQL option file for credentials
+					$tmp_opt_file = tempnam(sys_get_temp_dir(), 'srdt_mycnf_');
+					$opt_contents = "[client]\n";
+					$opt_contents .= "user=" . DB_USER . "\n";
 					if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
-						$cmd .= ' -p' . escapeshellarg( DB_PASSWORD );
+						$opt_contents .= "password=" . DB_PASSWORD . "\n";
 					}
+					$opt_contents .= "host=" . $host . "\n";
+					if ( $port )   { $opt_contents .= "port=" . (string) $port . "\n"; }
+					if ( $socket ) { $opt_contents .= "socket=" . $socket . "\n"; }
+					// Write the option file
+					file_put_contents( $tmp_opt_file, $opt_contents );
+
+					$cmd  = 'mysqldump --defaults-extra-file=' . escapeshellarg( $tmp_opt_file );
+					$cmd .= ' --single-transaction --quick --lock-tables=false';
 					$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' > ' . escapeshellarg( $file_path ) . ' 2>&1';
 
 					$output = [];
 					$return = 0;
 					exec( $cmd, $output, $return );
+					// Remove the temporary option file
+					@unlink( $tmp_opt_file );
 					if ( 0 !== $return ) {
 						error_log( 'SRDT: mysqldump failed: ' . implode( "\n", $output ) );
 					} else {
