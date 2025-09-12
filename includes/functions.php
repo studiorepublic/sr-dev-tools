@@ -27,15 +27,15 @@ function srdt_get_sync_path( $subfolder = '' ) {
 		$custom_path = srdt_validate_sync_path( $custom_path );
 		if ( false === $custom_path ) {
 			// Fall back to default if invalid
-			$base_path = SRDT_PLUGIN_PATH . 'sync/';
+			$base_path = trailingslashit( get_stylesheet_directory() ) . 'sync/';
 		} else {
 			// Remove leading slash and treat as relative to ABSPATH
 			$custom_path = ltrim( $custom_path, '/' );
 			$base_path = trailingslashit( ABSPATH ) . $custom_path;
 		}
 	} else {
-		// Default to plugin's sync folder
-		$base_path = SRDT_PLUGIN_PATH . 'sync/';
+		// Default to current theme's sync folder
+		$base_path = trailingslashit( get_stylesheet_directory() ) . 'sync/';
 	}
 	
 	$base_path = trailingslashit( $base_path );

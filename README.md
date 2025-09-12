@@ -41,7 +41,7 @@ Instead of wrestling with database dumps or complex migration tools, this plugin
 
 ### Database Tools
 
-- **Dump Database**: Create SQL dumps to your active theme's `resources/database/` folder
+- **Dump Database**: Create SQL dumps to your active theme's `sync/database/` folder
 - **List & Delete Dumps**: View all available `.sql` files in the admin with size and timestamp, and delete individual dumps securely
 - **One-click Import**: Import the most recent dump; the Site URL and Home settings are restored automatically
 
@@ -118,7 +118,7 @@ git commit -m "Initial content export"
 ### 5. Manage Database Dumps
 
 Go to the Database section under **SRDT Export**:
-- Click "Dump database" to create a new SQL dump in your theme's `resources/database/` folder
+- Click "Dump database" to create a new SQL dump in your theme's `sync/database/` folder
 - See a list of existing dumps with file size and modified time
 - Use the Delete action next to a dump to remove it securely
 - Click "Import database" to import the most recent dump (Site URL and Home are restored automatically)

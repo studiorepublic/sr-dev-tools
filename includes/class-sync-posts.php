@@ -776,7 +776,7 @@ class SRDT_Sync_Posts {
 	}
 
 	/**
-	 * Dump the database to theme resources/database directory.
+	 * Dump the database to theme sync/database directory.
 	 *
 	 * Creates a SQL dump using WP-CLI if available, otherwise falls back to mysqldump.
 	 *
@@ -791,7 +791,7 @@ class SRDT_Sync_Posts {
 			return;
 		}
 
-		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
 		if ( ! is_dir( $target_dir ) ) {
 			if ( ! wp_mkdir_p( $target_dir ) ) {
 				error_log( 'SRDT: Failed to create database resources directory: ' . $target_dir );
@@ -877,7 +877,7 @@ class SRDT_Sync_Posts {
 	}
 
 	/**
-	 * Import the most recent SQL dump from theme resources/database.
+	 * Import the most recent SQL dump from theme sync/database.
 	 *
 	 * Restores siteurl and home options after import.
 	 * Uses WP-CLI if available, otherwise falls back to mysql client.
@@ -893,7 +893,7 @@ class SRDT_Sync_Posts {
 			return;
 		}
 
-		$source_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$source_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
 		if ( ! is_dir( $source_dir ) ) {
 			return;
 		}
@@ -975,7 +975,7 @@ class SRDT_Sync_Posts {
 
 	/**
 	 * Backup each plugin directory in wp-content/plugins into individual zip files
-	 * in the current theme's resources/plugins directory.
+	 * in the current theme's sync/plugins directory.
 	 *
 	 * @since 1.2.0
 	 * @param array $args       Positional CLI args (unused).
@@ -993,7 +993,7 @@ class SRDT_Sync_Posts {
 			return;
 		}
 
-		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/plugins/';
+		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
 		if ( ! is_dir( $target_dir ) ) {
 			if ( ! wp_mkdir_p( $target_dir ) ) {
 				error_log( 'SRDT: Failed to create plugins resources directory: ' . $target_dir );

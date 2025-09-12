@@ -142,7 +142,7 @@ function srdt_render_export_page() {
 			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
 		}
 
-		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
 		if ( ! is_dir( $database_dir ) ) {
 			wp_mkdir_p( $database_dir );
 		}
@@ -174,7 +174,7 @@ function srdt_render_export_page() {
 			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
 		}
 
-		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
 		if ( ! is_dir( $database_dir ) ) {
 			echo '<div class="notice notice-error"><p>' . esc_html__( 'No database directory found in the current theme.', 'srdt' ) . '</p></div>';
 		} else {
@@ -196,7 +196,7 @@ function srdt_render_export_page() {
 			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
 		}
 
-		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
 		$dump_file    = isset( $_POST['srdt_dump_file'] ) ? sanitize_text_field( wp_unslash( $_POST['srdt_dump_file'] ) ) : '';
 		$dump_file    = basename( $dump_file ); // prevent traversal
 
@@ -224,7 +224,7 @@ function srdt_render_export_page() {
 			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
 		}
 
-		$plugins_target = trailingslashit( get_stylesheet_directory() ) . 'resources/plugins/';
+		$plugins_target = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
 		if ( ! is_dir( $plugins_target ) ) {
 			wp_mkdir_p( $plugins_target );
 		}
@@ -265,7 +265,7 @@ function srdt_render_export_page() {
         <form method="post">
             <?php wp_nonce_field( 'srdt_post_types_action', 'srdt_post_types_nonce' ); ?>
             <h2><?php esc_html_e( 'Post Types to Export/Import', 'srdt' ); ?></h2>
-            <p><?php esc_html_e( 'Select which post types should be included in exports and imports.', 'srdt' ); ?></p>
+            <p><label for="srdt-post-types-select"><?php esc_html_e( 'Select which post types should be included in exports and imports.', 'srdt' ); ?></label></p>
             <select name="srdt_post_types[]" multiple="multiple" id="srdt-post-types-select" style="width: 100%;">
                 <?php foreach ( $all_post_types as $post_type => $post_type_obj ) : ?>
                     <option value="<?php echo esc_attr( $post_type ); ?>" <?php selected( in_array( $post_type, $selected_post_types, true ) ); ?>>
@@ -281,7 +281,7 @@ function srdt_render_export_page() {
         <form method="post">
             <?php wp_nonce_field( 'srdt_sync_path_action', 'srdt_sync_path_nonce' ); ?>
             <h2><?php esc_html_e( 'Custom Sync Folder Path', 'srdt' ); ?></h2>
-            <p><?php esc_html_e( 'Enter the full or relative path (from site root) where JSON files should be saved.', 'srdt' ); ?></p>
+            <p><label for="srdt_sync_path"><?php esc_html_e( 'Enter the full or relative path (from site root) where JSON files should be saved.', 'srdt' ); ?></label></p>
             <input type="text" name="srdt_sync_path" value="<?php echo esc_attr( $custom_path ); ?>" style="width: 100%;" placeholder="<?php esc_attr_e( 'e.g., wp-content/plugins/db-version-control/sync-testing-folder/', 'srdt' ); ?>">
             <p><strong><?php esc_html_e( 'Current resolved path:', 'srdt' ); ?></strong> <code><?php echo esc_html( $resolved_path ); ?></code></p>
             <?php submit_button( esc_html__( 'Save Folder Path', 'srdt' ), 'secondary', 'srdt_sync_path_save' ); ?>
@@ -301,12 +301,12 @@ function srdt_render_export_page() {
         <h2><?php esc_html_e( 'Database', 'srdt' ); ?></h2>
         <form method="post">
             <?php wp_nonce_field( 'srdt_dump_db_action', 'srdt_dump_db_nonce' ); ?>
-            <p><?php esc_html_e( 'Dump the current database to the active theme\'s resources/database folder.', 'srdt' ); ?></p>
+            <p><?php esc_html_e( 'Dump the current database to the active theme\'s sync/database folder.', 'srdt' ); ?></p>
             <?php submit_button( esc_html__( 'Dump database', 'srdt' ), 'secondary', 'srdt_dump_db' ); ?>
         </form>
         <?php
-        // List available SQL dump files in theme resources/database folder.
-        $database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+        // List available SQL dump files in theme sync/database folder.
+        $database_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
         $srdt_files = is_dir( $database_dir ) ? glob( $database_dir . '*.sql' ) : [];
         if ( ! empty( $srdt_files ) ) {
             usort( $srdt_files, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
@@ -332,7 +332,7 @@ function srdt_render_export_page() {
         ?>
         <form method="post" style="margin-top: 10px;">
             <?php wp_nonce_field( 'srdt_import_db_action', 'srdt_import_db_nonce' ); ?>
-            <p><?php esc_html_e( 'Import the most recent SQL dump from the theme resources/database folder. The Site URL and Home settings will be restored after import.', 'srdt' ); ?></p>
+            <p><?php esc_html_e( 'Import the most recent SQL dump from the theme sync/database folder. The Site URL and Home settings will be restored after import.', 'srdt' ); ?></p>
             <?php submit_button( esc_html__( 'Import database', 'srdt' ), 'secondary', 'srdt_import_db' ); ?>
         </form>
 
@@ -341,7 +341,7 @@ function srdt_render_export_page() {
         <h2><?php esc_html_e( 'Plugins', 'srdt' ); ?></h2>
         <form method="post">
             <?php wp_nonce_field( 'srdt_backup_plugins_action', 'srdt_backup_plugins_nonce' ); ?>
-            <p><?php esc_html_e( 'Zip each plugin under wp-content/plugins into the theme\'s resources/plugins folder.', 'srdt' ); ?></p>
+            <p><?php esc_html_e( 'Zip each plugin under wp-content/plugins into the theme\'s sync/plugins folder.', 'srdt' ); ?></p>
             <?php submit_button( esc_html__( 'Backup plugins', 'srdt' ), 'secondary', 'srdt_backup_plugins' ); ?>
         </form>
     </div>
