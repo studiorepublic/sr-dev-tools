@@ -991,38 +991,39 @@ class SRDT_Sync_Posts {
 	 * @since 1.2.0
 	 * @param array $args       Positional CLI args (unused).
 	 * @param array $assoc_args Associative CLI args (unused).
-	 * @return void
+	 * @return int Number of plugin zip files created during this run.
 	 */
 	public static function backup_plugins( $args = [], $assoc_args = [] ) {
 		// Only allow via CLI or admins.
 		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
-			return;
+			return 0;
 		}
 
 		$plugins_root = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
 		if ( ! is_dir( $plugins_root ) ) {
-			return;
+			return 0;
 		}
 
 		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
 		if ( ! is_dir( $target_dir ) ) {
 			if ( ! wp_mkdir_p( $target_dir ) ) {
 				error_log( 'SRDT: Failed to create plugins resources directory: ' . $target_dir );
-				return;
+				return 0;
 			}
 		}
 
 		$dirs = glob( trailingslashit( $plugins_root ) . '*', GLOB_ONLYDIR );
 		if ( empty( $dirs ) ) {
-			return;
+			return 0;
 		}
 
 		$timestamp = gmdate( 'Ymd-His' );
 		$zip_available = class_exists( 'ZipArchive' );
+		$created_count = 0;
 
 		foreach ( $dirs as $dir ) {
 			$slug = basename( $dir );
-			$zip_path = $target_dir . $slug . '-' . $timestamp . '.zip';
+			$zip_path = $target_dir . $slug . '.zip';
 
 			if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $zip_path ) ) {
 				error_log( 'SRDT: Unsafe plugins backup zip path detected: ' . $zip_path );
@@ -1049,6 +1050,7 @@ class SRDT_Sync_Posts {
 					$zip->addFile( $filepath, $localname );
 				}
 				$zip->close();
+				$created_count++;
 			} else {
 				// Fallback to system zip command
 				$cmd = 'cd ' . escapeshellarg( $plugins_root ) . ' && zip -r -q ' . escapeshellarg( $zip_path ) . ' ' . escapeshellarg( $slug ) . ' -x "*.DS_Store" 2>&1';
@@ -1059,12 +1061,14 @@ class SRDT_Sync_Posts {
 					error_log( 'SRDT: zip command failed for ' . $slug . ': ' . implode( "\n", $output ) );
 					continue;
 				}
+				$created_count++;
 			}
 
 			do_action( 'srdt_after_backup_plugin', $zip_path, $dir );
 		}
 
 		do_action( 'srdt_after_backup_plugins', $target_dir );
+		return $created_count;
 	}
 
 	/**

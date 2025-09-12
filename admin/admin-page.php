@@ -228,21 +228,11 @@ function srdt_render_export_page() {
 		if ( ! is_dir( $plugins_target ) ) {
 			wp_mkdir_p( $plugins_target );
 		}
-		$before = glob( $plugins_target . '*.zip' );
-		$before_count = is_array( $before ) ? count( $before ) : 0;
 
-		SRDT_Sync_Posts::backup_plugins();
+		$created = (int) SRDT_Sync_Posts::backup_plugins();
 		clearstatcache();
 
-		$after = glob( $plugins_target . '*.zip' );
-		$after_count = is_array( $after ) ? count( $after ) : 0;
-		$created = max( 0, $after_count - $before_count );
-
-		if ( $created > 0 ) {
-			echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Created %d plugin backup(s) in %s', 'srdt' ), (int) $created, '<code>' . esc_html( $plugins_target ) . '</code>' ) . '</p></div>';
-		} else {
-			echo '<div class="notice notice-warning"><p>' . esc_html__( 'No new plugin backups were created.', 'srdt' ) . '</p></div>';
-		}
+		echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Created %d plugin backup(s) in %s', 'srdt' ), (int) $created, '<code>' . esc_html( $plugins_target ) . '</code>' ) . '</p></div>';
 	}
 
 	// Get the current resolved path for display.
