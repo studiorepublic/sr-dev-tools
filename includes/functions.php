@@ -2,8 +2,8 @@
 /**
  * Get the sync path for exports
  * 
- * @package   DB Version Control
- * @author    Robert DeVore <me@robertdevore.com>
+ * @package   SR Dev Tools
+ * @author    Chris Todhunter
  */
 
 // If this file is called directly, abort.
@@ -19,23 +19,23 @@ if ( ! defined( 'WPINC' ) ) {
  * @since  1.0.0
  * @return string
  */
-function dbvc_get_sync_path( $subfolder = '' ) {
-	$custom_path = get_option( 'dbvc_sync_path', '' );
+function srdt_get_sync_path( $subfolder = '' ) {
+	$custom_path = get_option( 'srdt_sync_path', '' );
 	
 	if ( ! empty( $custom_path ) ) {
 		// Validate and sanitize the custom path
-		$custom_path = dbvc_validate_sync_path( $custom_path );
+		$custom_path = srdt_validate_sync_path( $custom_path );
 		if ( false === $custom_path ) {
 			// Fall back to default if invalid
-			$base_path = DBVC_PLUGIN_PATH . 'sync/';
+			$base_path = trailingslashit( get_stylesheet_directory() ) . 'sync/';
 		} else {
 			// Remove leading slash and treat as relative to ABSPATH
 			$custom_path = ltrim( $custom_path, '/' );
 			$base_path = trailingslashit( ABSPATH ) . $custom_path;
 		}
 	} else {
-		// Default to plugin's sync folder
-		$base_path = DBVC_PLUGIN_PATH . 'sync/';
+		// Default to current theme's sync folder
+		$base_path = trailingslashit( get_stylesheet_directory() ) . 'sync/';
 	}
 	
 	$base_path = trailingslashit( $base_path );
@@ -57,7 +57,7 @@ function dbvc_get_sync_path( $subfolder = '' ) {
  * @since  1.0.0
  * @return string|false Validated path or false if invalid.
  */
-function dbvc_validate_sync_path( $path ) {
+function srdt_validate_sync_path( $path ) {
 	if ( empty( $path ) ) {
 		return '';
 	}
@@ -116,9 +116,9 @@ function dbvc_validate_sync_path( $path ) {
  * @since  1.0.0
  * @return mixed Sanitized data.
  */
-function dbvc_sanitize_json_data( $data ) {
+function srdt_sanitize_json_data( $data ) {
 	if ( is_array( $data ) ) {
-		return array_map( 'dbvc_sanitize_json_data', $data );
+		return array_map( 'srdt_sanitize_json_data', $data );
 	}
 	
 	if ( is_string( $data ) ) {
@@ -137,30 +137,64 @@ function dbvc_sanitize_json_data( $data ) {
  * @since  1.0.0
  * @return bool True if safe, false otherwise.
  */
-function dbvc_is_safe_file_path( $file_path ) {
-	// Check for null bytes
-	if ( strpos( $file_path, chr( 0 ) ) !== false ) {
+function srdt_is_safe_file_path( $file_path ) {
+	// Basic input sanity check
+	if ( ! is_string( $file_path ) || $file_path === '' ) {
 		return false;
 	}
-	
-	// Check for directory traversal
-	if ( strpos( $file_path, '..' ) !== false ) {
+
+	// Validate the file path for directory traversal and other issues
+	$validated_path = srdt_validate_sync_path( $file_path );
+	if ( false === $validated_path ) {
 		return false;
 	}
-	
-	// Ensure file is within WordPress directory structure
-	$wp_path = realpath( ABSPATH );
-	$resolved_path = realpath( dirname( $file_path ) );
-	
-	if ( false === $resolved_path || strpos( $resolved_path, $wp_path ) !== 0 ) {
-		return false;
+
+	// Determine target directory for the file
+	$dir = dirname( $validated_path );
+	if ( ! is_dir( $dir ) ) {
+		// Attempt to create the directory tree so we can place .htaccess
+		if ( function_exists( 'wp_mkdir_p' ) ) {
+			if ( ! wp_mkdir_p( $dir ) ) {
+				return false;
+			}
+		} else {
+			if ( ! @mkdir( $dir, 0755, true ) && ! is_dir( $dir ) ) {
+				return false;
+			}
+		}
 	}
-	
-	// Check file extension
-	$allowed_extensions = [ 'json' ];
-	$extension = pathinfo( $file_path, PATHINFO_EXTENSION );
-	
- return in_array( strtolower( $extension ), $allowed_extensions, true );
+
+	$htaccess_path = trailingslashit( $dir ) . '.htaccess';
+	$existing = is_readable( $htaccess_path ) ? file_get_contents( $htaccess_path ) : '';
+	$has_deny = false;
+	if ( is_string( $existing ) && $existing !== '' ) {
+		$lower = strtolower( $existing );
+		$has_deny = ( strpos( $lower, 'require all denied' ) !== false ) || ( strpos( $lower, 'deny from all' ) !== false );
+	}
+
+	// If no .htaccess or not properly denying, append our protection block
+	if ( ! $has_deny ) {
+		$block = "\n# BEGIN SRDT\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Deny from all\n</IfModule>\n# END SRDT\n";
+		$write_ok = false;
+		if ( is_writable( $dir ) ) {
+			if ( file_exists( $htaccess_path ) && is_writable( $htaccess_path ) ) {
+				$write_ok = ( false !== file_put_contents( $htaccess_path, $existing . $block ) );
+			} else {
+				$write_ok = ( false !== file_put_contents( $htaccess_path, $block ) );
+			}
+		}
+		
+		if ( ! $write_ok ) {
+			return false;
+		}
+		
+		// Re-read to verify
+		$existing = is_readable( $htaccess_path ) ? file_get_contents( $htaccess_path ) : '';
+		$lower = is_string( $existing ) ? strtolower( $existing ) : '';
+		$has_deny = ( strpos( $lower, 'require all denied' ) !== false ) || ( strpos( $lower, 'deny from all' ) !== false );
+	}
+
+	return (bool) $has_deny;
 }
 
 /**
@@ -173,9 +207,9 @@ function dbvc_is_safe_file_path( $file_path ) {
  * @since 1.1.0
  * @return array Result data including created/skipped counts and messages.
  */
-function dbvc_generate_modules_pages() {
+function srdt_generate_modules_pages() {
 	if ( ! current_user_can( 'manage_options' ) ) {
-		return [ 'error' => __( 'Insufficient permissions.', 'dbvc' ) ];
+		return [ 'error' => __( 'Insufficient permissions.', 'srdt' ) ];
 	}
 
 	$results = [
@@ -198,7 +232,7 @@ function dbvc_generate_modules_pages() {
 			'post_content' => '',
 		] );
 		if ( is_wp_error( $modules_id ) ) {
-			$results['errors'][] = sprintf( /* translators: %s: error message */ __( 'Failed to create Modules page: %s', 'dbvc' ), $modules_id->get_error_message() );
+			$results['errors'][] = sprintf( /* translators: %s: error message */ __( 'Failed to create Modules page: %s', 'srdt' ), $modules_id->get_error_message() );
 			return $results;
 		}
 		$results['modules_page_created'] = true;
@@ -221,16 +255,16 @@ function dbvc_generate_modules_pages() {
 		foreach ( $files as $file ) {
 			$content = file_get_contents( $file );
 			if ( false === $content ) {
-				$results['errors'][] = sprintf( __( 'Unable to read file: %s', 'dbvc' ), esc_html( $file ) );
+				$results['errors'][] = sprintf( __( 'Unable to read file: %s', 'srdt' ), esc_html( $file ) );
 				continue;
 			}
 			$data = json_decode( $content, true );
 			if ( json_last_error() !== JSON_ERROR_NONE ) {
-				$results['errors'][] = sprintf( __( 'Invalid JSON in file: %s', 'dbvc' ), esc_html( $file ) );
+				$results['errors'][] = sprintf( __( 'Invalid JSON in file: %s', 'srdt' ), esc_html( $file ) );
 				continue;
 			}
 
-			$partials = dbvc_acf_collect_partial_field_names( $data );
+			$partials = srdt_acf_collect_partial_field_names( $data );
 			$results['partials'] = array_values( array_unique( array_merge( $results['partials'], $partials ) ) );
 		}
 	}
@@ -273,7 +307,7 @@ function dbvc_generate_modules_pages() {
 		] );
 
 		if ( is_wp_error( $new_id ) ) {
-			$results['errors'][] = sprintf( __( 'Failed to create page for "%s": %s', 'dbvc' ), $partial_name, $new_id->get_error_message() );
+			$results['errors'][] = sprintf( __( 'Failed to create page for "%s": %s', 'srdt' ), $partial_name, $new_id->get_error_message() );
 			continue;
 		}
 
@@ -289,7 +323,7 @@ function dbvc_generate_modules_pages() {
  * @param array $data Decoded ACF JSON data.
  * @return array List of field names (strings).
  */
-function dbvc_acf_collect_partial_field_names( $data ) {
+function srdt_acf_collect_partial_field_names( $data ) {
 	$found = [];
 
 	$walker = function( $node ) use ( & $walker, & $found ) {

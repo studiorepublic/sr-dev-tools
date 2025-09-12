@@ -1,8 +1,10 @@
-# DB Version Control
+# SR Dev Tools
 
-**Sync WordPress to version-controlled JSON files for easy Git workflows.**
+**Sync WordPress to version-controlled JSON files for easy Git workflows.**<br>
+**Export and import database**<br>
+**Export plugins to zip files**
 
-[![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)](https://wordpress.org/) [![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)](https://php.net/) [![License](https://img.shields.io/badge/License-GPL%20v2%2B-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+
 
 ## Overview
 
@@ -37,6 +39,12 @@ Instead of wrestling with database dumps or complex migration tools, this plugin
 
 - **Module Page Creation**: Easily create module pages directly from the plugin interface
 
+### Database Tools
+
+- **Dump Database**: Create SQL dumps to your active theme's `sync/database/` folder
+- **List & Delete Dumps**: View all available `.sql` files in the admin with size and timestamp, and delete individual dumps securely
+- **One-click Import**: Import the most recent dump; the Site URL and Home settings are restored automatically
+
 ### Enterprise Ready
 
 - **Security First**: CSRF protection, capability checks, and input sanitization
@@ -58,18 +66,18 @@ Instead of wrestling with database dumps or complex migration tools, this plugin
 1. Download the plugin zip file
 2. Go to **Plugins > Add New > Upload Plugin**
 3. Upload and activate the plugin
-4. Navigate to **DBVC Export** in your admin menu
+4. Navigate to **SRDT Export** in your admin menu
 
 ### Manual Installation
 1. Upload the `db-version-control` folder to `/wp-content/plugins/`
 2. Activate the plugin through the WordPress admin
-3. Configure your settings under **DBVC Export**
+3. Configure your settings under **SRDT Export**
 
 ## 🎯 Quick Start
 
 ### 1. Configure Post Types
 
-Navigate to **DBVC Export** and select which post types you want to sync:
+Navigate to **SRDT Export** and select which post types you want to sync:
 
 - Posts and Pages (enabled by default)
 - Custom post types (WooCommerce products, events, etc.)
@@ -80,7 +88,7 @@ Navigate to **DBVC Export** and select which post types you want to sync:
 Choose where to store your JSON files:
 
 ```
-wp-content/uploads/dbvc-sync/                # Safe, backed up location
+wp-content/uploads/srdt-sync/                # Safe, backed up location
 wp-content/plugins/db-version-control/sync/  # Plugin directory (default)
 ../site-content/                             # Outside web root (recommended)
 ```
@@ -93,7 +101,7 @@ Click "Run Full Export" to generate JSON files for all content.
 
 **Via WP-CLI:**
 ```bash
-wp dbvc export
+wp srdt export
 ```
 
 ### 4. Version Control Integration
@@ -107,34 +115,42 @@ git add .
 git commit -m "Initial content export"
 ```
 
+### 5. Manage Database Dumps
+
+Go to the Database section under **SRDT Export**:
+- Click "Dump database" to create a new SQL dump in your theme's `sync/database/` folder
+- See a list of existing dumps with file size and modified time
+- Use the Delete action next to a dump to remove it securely
+- Click "Import database" to import the most recent dump (Site URL and Home are restored automatically)
+
 ## WP-CLI Commands
 
 ### Export All Content
 
 ```bash
-wp dbvc export
+wp srdt export
 ```
 
 Exports all posts, pages, options, and menus to JSON files.
 
 **Batch Processing Options:**
 ```bash
-wp dbvc export --batch-size=100 # Process 100 posts per batch
-wp dbvc export --batch-size=0   # Disable batching (process all at once)
+wp srdt export --batch-size=100 # Process 100 posts per batch
+wp srdt export --batch-size=0   # Disable batching (process all at once)
 ```
 
 ### Import All Content
 
 ```bash
-wp dbvc import
+wp srdt import
 ```
 
 ⚠️ **Warning**: This overwrites existing content. Always backup first!
 
 **Batch Processing Options:**
 ```bash
-wp dbvc import --batch-size=25 # Process 25 files per batch  
-wp dbvc import --batch-size=0  # Disable batching (process all at once)
+wp srdt import --batch-size=25 # Process 25 files per batch  
+wp srdt import --batch-size=0  # Disable batching (process all at once)
 ```
 
 ### Performance Considerations
@@ -148,7 +164,7 @@ wp dbvc import --batch-size=0  # Disable batching (process all at once)
 **Real-world Performance:**
 ```bash
 # Example output from a site with 395 posts across 6 post types
-wp dbvc export --batch-size=50
+wp srdt export --batch-size=50
 
 Starting batch export with batch size: 50
 Processed batch: 50 posts | Total: 50/398 | Remaining: 348
@@ -163,7 +179,7 @@ Success: Batch export completed! Processed 395 posts across post types: post, pa
 ```bash
 #!/bin/bash
 # Daily content backup
-wp dbvc export
+wp srdt export
 cd /path/to/sync/folder
 git add -A
 git commit -m "Automated content backup $(date)"
@@ -195,27 +211,27 @@ sync-folder/
 
 ```bash
 # On staging site
-wp dbvc export
+wp srdt export
 git add sync/
 git commit -m "Content updates for v2.1"
 git push
 
 # On production site  
 git pull
-wp dbvc import
+wp srdt import
 ```
 
 ### Team Collaboration
 
 ```bash
 # Content editor exports changes
-wp dbvc export
+wp srdt export
 
 # Developer reviews in pull request
 git diff sync/
 
 # Changes merged and deployed
-wp dbvc import
+wp srdt import
 ```
 
 ### Automated Deployment
@@ -224,7 +240,7 @@ wp dbvc import
 # GitHub Actions example
 - name: Deploy Content
   run: |
-    wp dbvc export
+    wp srdt export
     git add sync/
     git commit -m "Auto-export: ${{ github.sha }}" || exit 0
     git push
@@ -236,7 +252,7 @@ wp dbvc import
 
 **Modify supported post types:**
 ```php
-add_filter( 'dbvc_supported_post_types', function( $post_types ) {
+add_filter( 'srdt_supported_post_types', function( $post_types ) {
     $post_types[] = 'my_custom_post_type';
     return $post_types;
 });
@@ -244,7 +260,7 @@ add_filter( 'dbvc_supported_post_types', function( $post_types ) {
 
 **Exclude sensitive options:**
 ```php
-add_filter( 'dbvc_excluded_option_keys', function( $excluded ) {
+add_filter( 'srdt_excluded_option_keys', function( $excluded ) {
     $excluded[] = 'my_secret_api_key';
     return $excluded;
 });
@@ -252,7 +268,7 @@ add_filter( 'dbvc_excluded_option_keys', function( $excluded ) {
 
 **Modify export data:**
 ```php
-add_filter( 'dbvc_export_post_data', function( $data, $post_id, $post ) {
+add_filter( 'srdt_export_post_data', function( $data, $post_id, $post ) {
     // Add custom fields or modify data
     $data['custom_field'] = get_field( 'my_field', $post_id );
     return $data;
@@ -263,7 +279,7 @@ add_filter( 'dbvc_export_post_data', function( $data, $post_id, $post ) {
 
 **Custom export operations:**
 ```php
-add_action( 'dbvc_after_export_post', function( $post_id, $post, $file_path ) {
+add_action( 'srdt_after_export_post', function( $post_id, $post, $file_path ) {
     // Custom logic after post export
     do_something_with_exported_post( $post_id );
 });
@@ -271,7 +287,7 @@ add_action( 'dbvc_after_export_post', function( $post_id, $post, $file_path ) {
 
 **Skip certain meta keys:**
 ```php
-add_filter( 'dbvc_skip_meta_keys', function( $skip_keys ) {
+add_filter( 'srdt_skip_meta_keys', function( $skip_keys ) {
     $skip_keys[] = '_temporary_data';
     return $skip_keys;
 });
@@ -303,8 +319,8 @@ add_filter( 'dbvc_skip_meta_keys', function( $skip_keys ) {
 **Permission Denied Errors:**
 ```bash
 # Fix directory permissions
-chmod 755 wp-content/uploads/dbvc-sync/
-chown www-data:www-data wp-content/uploads/dbvc-sync/
+chmod 755 wp-content/uploads/srdt-sync/
+chown www-data:www-data wp-content/uploads/srdt-sync/
 ```
 
 **WP-CLI Command Not Found:**

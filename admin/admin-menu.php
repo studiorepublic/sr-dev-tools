@@ -1,9 +1,9 @@
 <?php
 /**
  * Get the sync path for exports
- * 
- * @package   DB Version Control
- * @author    Robert DeVore <me@robertdevore.com>
+ *
+ * @package   SR Dev Tools
+ * @author    Chris Todhunter
  * @since     1.0.0
  */
 
@@ -13,20 +13,20 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 /**
- * Register the admin menu for DB Version Control
+ * Register the admin menu for SR Dev Tools
  * 
  * @since  1.0.0
  * @return void
  */
-function dbvc_register_admin_menu() {
+function srdt_register_admin_menu() {
 	add_menu_page(
-		esc_html__( 'DB Version Control', 'dbvc' ),
-		esc_html__( 'DBVC Export', 'dbvc' ),
+		esc_html__( 'SR Dev Tools', 'srdt' ),
+		esc_html__( 'SR Dev Tools', 'srdt' ),
 		'manage_options',
-		'dbvc-export',
-		'dbvc_render_export_page',
+		'sr-dev-tools',
+		'srdt_render_export_page',
 		'dashicons-download',
 		80
 	);
 }
-add_action( 'admin_menu', 'dbvc_register_admin_menu' );
+add_action( 'admin_menu', 'srdt_register_admin_menu' );
