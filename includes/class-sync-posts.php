@@ -958,14 +958,16 @@ class SRDT_Sync_Posts {
 			if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
 			if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
 			$cmd .= ' -u ' . escapeshellarg( DB_USER );
-			if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
-				$cmd .= ' -p' . escapeshellarg( DB_PASSWORD );
-			}
+			// Do not pass password on command line; use MYSQL_PWD environment variable instead.
 			$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' < ' . escapeshellarg( $file_path ) . ' 2>&1';
 
 			$output = [];
 			$return = 0;
-			exec( $cmd, $output, $return );
+			$env = null;
+			if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
+				$env = array_merge($_ENV, ['MYSQL_PWD' => DB_PASSWORD]);
+			}
+			exec( $cmd, $output, $return, $env );
 			if ( 0 !== $return ) {
 				error_log( 'SRDT: mysql import failed: ' . implode( "\n", $output ) );
 				return;
