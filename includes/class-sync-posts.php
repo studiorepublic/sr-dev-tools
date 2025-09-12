@@ -774,4 +774,399 @@ class DBVC_Sync_Posts {
 		// Allow other plugins to handle additional FSE import data.
 		do_action( 'dbvc_after_import_fse_theme_data', $theme_data );
 	}
+
+	/**
+	 * Dump the database to theme resources/database directory.
+	 *
+	 * Creates a SQL dump using WP-CLI if available, otherwise falls back to mysqldump.
+	 *
+	 * @since 1.2.0
+	 * @param array $args       Positional CLI args (unused).
+	 * @param array $assoc_args Associative CLI args (unused).
+	 * @return void
+	 */
+	public static function dump_database( $args = [], $assoc_args = [] ) {
+		// Only allow via CLI or admins.
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		if ( ! is_dir( $target_dir ) ) {
+			if ( ! wp_mkdir_p( $target_dir ) ) {
+				error_log( 'DBVC: Failed to create database resources directory: ' . $target_dir );
+				return;
+			}
+		}
+
+		$filename  = 'database-' . gmdate( 'Ymd-His' ) . '.sql';
+		$file_path = $target_dir . $filename;
+
+		// Validate file path
+		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
+			error_log( 'DBVC: Unsafe database dump file path detected: ' . $file_path );
+			return;
+		}
+
+		$export_ok = false;
+
+		// Prefer WP-CLI if available
+		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
+			\WP_CLI::runcommand( 'db export ' . escapeshellarg( $file_path ), [ 'return' => 'all', 'exit_error' => false ] );
+			$export_ok = file_exists( $file_path ) && filesize( $file_path ) > 0;
+		}
+
+		// Fallback to mysqldump or PHP exporter
+		if ( ! $export_ok ) {
+			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
+				error_log( 'DBVC: Database constants missing; cannot perform dump. Falling back to PHP exporter if possible.' );
+			} else {
+				$host   = DB_HOST;
+				$port   = null;
+				$socket = null;
+				if ( false !== strpos( $host, ':' ) ) {
+					list( $host_part, $extra ) = explode( ':', $host, 2 );
+					$host = $host_part;
+					if ( is_numeric( $extra ) ) {
+						$port = (int) $extra;
+					} else {
+						$socket = $extra;
+					}
+				}
+
+				$mysqldump_available = false;
+				if ( function_exists( 'shell_exec' ) ) {
+					$which = @shell_exec( 'command -v mysqldump 2>/dev/null' );
+					$mysqldump_available = is_string( $which ) && trim( $which ) !== '';
+				}
+
+				if ( function_exists( 'exec' ) && $mysqldump_available ) {
+					$cmd  = 'mysqldump --single-transaction --quick --lock-tables=false';
+					$cmd .= ' -h ' . escapeshellarg( $host );
+					if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
+					if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
+					$cmd .= ' -u ' . escapeshellarg( DB_USER );
+					if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
+						$cmd .= ' -p' . escapeshellarg( DB_PASSWORD );
+					}
+					$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' > ' . escapeshellarg( $file_path ) . ' 2>&1';
+
+					$output = [];
+					$return = 0;
+					exec( $cmd, $output, $return );
+					if ( 0 !== $return ) {
+						error_log( 'DBVC: mysqldump failed: ' . implode( "\n", $output ) );
+					} else {
+						$export_ok = file_exists( $file_path ) && filesize( $file_path ) > 0;
+					}
+				}
+			}
+
+			// Final fallback: pure-PHP exporter
+			if ( ! $export_ok ) {
+				$export_ok = self::dump_database_via_php( $file_path );
+			}
+		}
+
+		if ( ! $export_ok ) {
+			error_log( 'DBVC: Database export failed to create a valid dump file.' );
+			return;
+		}
+
+		do_action( 'dbvc_after_dump_database', $file_path );
+	}
+
+	/**
+	 * Import the most recent SQL dump from theme resources/database.
+	 *
+	 * Restores siteurl and home options after import.
+	 * Uses WP-CLI if available, otherwise falls back to mysql client.
+	 *
+	 * @since 1.2.0
+	 * @param array $args       Positional CLI args (unused).
+	 * @param array $assoc_args Associative CLI args (unused).
+	 * @return void
+	 */
+	public static function import_database( $args = [], $assoc_args = [] ) {
+		// Only allow via CLI or admins.
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$source_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		if ( ! is_dir( $source_dir ) ) {
+			return;
+		}
+
+		$files = glob( $source_dir . '*.sql' );
+		if ( empty( $files ) ) {
+			return;
+		}
+
+		usort( $files, function( $a, $b ) {
+			return filemtime( $b ) <=> filemtime( $a );
+		} );
+		$file_path = $files[0];
+
+		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
+			error_log( 'DBVC: Unsafe database import file path detected: ' . $file_path );
+			return;
+		}
+
+		$old_siteurl = get_option( 'siteurl' );
+		$old_home    = get_option( 'home' );
+
+		$import_ok = false;
+
+		// Prefer WP-CLI if available
+		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
+			\WP_CLI::runcommand( 'db import ' . escapeshellarg( $file_path ), [ 'return' => 'all', 'exit_error' => false ] );
+			$import_ok = true; // If command returned, assume import attempted
+		}
+
+		// Fallback to mysql client
+		if ( ! $import_ok ) {
+			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
+				error_log( 'DBVC: Database constants missing; cannot perform import.' );
+				return;
+			}
+
+			$host   = DB_HOST;
+			$port   = null;
+			$socket = null;
+			if ( false !== strpos( $host, ':' ) ) {
+				list( $host_part, $extra ) = explode( ':', $host, 2 );
+				$host = $host_part;
+				if ( is_numeric( $extra ) ) {
+					$port = (int) $extra;
+				} else {
+					$socket = $extra;
+				}
+			}
+
+			$cmd  = 'mysql';
+			$cmd .= ' -h ' . escapeshellarg( $host );
+			if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
+			if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
+			$cmd .= ' -u ' . escapeshellarg( DB_USER );
+			if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
+				$cmd .= ' -p' . escapeshellarg( DB_PASSWORD );
+			}
+			$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' < ' . escapeshellarg( $file_path ) . ' 2>&1';
+
+			$output = [];
+			$return = 0;
+			exec( $cmd, $output, $return );
+			if ( 0 !== $return ) {
+				error_log( 'DBVC: mysql import failed: ' . implode( "\n", $output ) );
+				return;
+			}
+
+			$import_ok = true;
+		}
+
+		// Restore critical URLs
+		if ( $import_ok ) {
+			update_option( 'siteurl', $old_siteurl );
+			update_option( 'home', $old_home );
+			do_action( 'dbvc_after_import_database', $file_path, $old_siteurl, $old_home );
+		}
+	}
+
+	/**
+	 * Backup each plugin directory in wp-content/plugins into individual zip files
+	 * in the current theme's resources/plugins directory.
+	 *
+	 * @since 1.2.0
+	 * @param array $args       Positional CLI args (unused).
+	 * @param array $assoc_args Associative CLI args (unused).
+	 * @return void
+	 */
+	public static function backup_plugins( $args = [], $assoc_args = [] ) {
+		// Only allow via CLI or admins.
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$plugins_root = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
+		if ( ! is_dir( $plugins_root ) ) {
+			return;
+		}
+
+		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/plugins/';
+		if ( ! is_dir( $target_dir ) ) {
+			if ( ! wp_mkdir_p( $target_dir ) ) {
+				error_log( 'DBVC: Failed to create plugins resources directory: ' . $target_dir );
+				return;
+			}
+		}
+
+		$dirs = glob( trailingslashit( $plugins_root ) . '*', GLOB_ONLYDIR );
+		if ( empty( $dirs ) ) {
+			return;
+		}
+
+		$timestamp = gmdate( 'Ymd-His' );
+		$zip_available = class_exists( 'ZipArchive' );
+
+		foreach ( $dirs as $dir ) {
+			$slug = basename( $dir );
+			$zip_path = $target_dir . $slug . '-' . $timestamp . '.zip';
+
+			if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $zip_path ) ) {
+				error_log( 'DBVC: Unsafe plugins backup zip path detected: ' . $zip_path );
+				continue;
+			}
+
+			if ( $zip_available ) {
+				$zip = new ZipArchive();
+				if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
+					error_log( 'DBVC: Failed to create zip: ' . $zip_path );
+					continue;
+				}
+
+				$files = new RecursiveIteratorIterator(
+					new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
+					RecursiveIteratorIterator::LEAVES_ONLY
+				);
+				foreach ( $files as $name => $file ) {
+					if ( $file->isDir() ) {
+						continue;
+					}
+					$filepath  = $file->getRealPath();
+					$localname = $slug . '/' . substr( $filepath, strlen( trailingslashit( $dir ) ) );
+					$zip->addFile( $filepath, $localname );
+				}
+				$zip->close();
+			} else {
+				// Fallback to system zip command
+				$cmd = 'cd ' . escapeshellarg( $plugins_root ) . ' && zip -r -q ' . escapeshellarg( $zip_path ) . ' ' . escapeshellarg( $slug ) . ' -x "*.DS_Store" 2>&1';
+				$output = [];
+				$return = 0;
+				exec( $cmd, $output, $return );
+				if ( 0 !== $return ) {
+					error_log( 'DBVC: zip command failed for ' . $slug . ': ' . implode( "\n", $output ) );
+					continue;
+				}
+			}
+
+			do_action( 'dbvc_after_backup_plugin', $zip_path, $dir );
+		}
+
+		do_action( 'dbvc_after_backup_plugins', $target_dir );
+	}
+
+	/**
+	 * Pure-PHP database exporter used when CLI tools are unavailable.
+	 *
+	 * @since 1.2.1
+	 * @param string $file_path Destination .sql file path.
+	 * @return bool True on success.
+	 */
+	private static function dump_database_via_php( $file_path ) {
+		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
+			return false;
+		}
+
+		global $wpdb;
+
+		if ( ! is_writable( dirname( $file_path ) ) ) {
+			return false;
+		}
+
+		@set_time_limit( 0 );
+
+		$fh = @fopen( $file_path, 'w' );
+		if ( ! $fh ) {
+			error_log( 'DBVC: Cannot open dump file for writing: ' . $file_path );
+			return false;
+		}
+
+		$header  = "-- DBVC SQL Dump\n";
+		$header .= "-- Host: " . ( defined( 'DB_HOST' ) ? DB_HOST : 'unknown' ) . "\n";
+		$header .= "-- Generation Time: " . gmdate( 'Y-m-d H:i:s' ) . " UTC\n\n";
+		$header .= "SET NAMES utf8mb4;\nSET foreign_key_checks=0;\nSET sql_mode='NO_AUTO_VALUE_ON_ZERO';\nSET time_zone='+00:00';\n\n";
+		fwrite( $fh, $header );
+
+		$tables = $wpdb->get_col( 'SHOW TABLES' );
+		if ( empty( $tables ) ) {
+			fclose( $fh );
+			return false;
+		}
+
+		foreach ( $tables as $table ) {
+			$create = $wpdb->get_row( "SHOW CREATE TABLE `$table`", ARRAY_N );
+			if ( ! empty( $create[1] ) ) {
+				fwrite( $fh, "--\n-- Table structure for table `$table`\n--\n\n" );
+				fwrite( $fh, "DROP TABLE IF EXISTS `$table`;\n" );
+				fwrite( $fh, $create[1] . ";\n\n" );
+			}
+
+			$count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$table`" );
+			if ( $count > 0 ) {
+				fwrite( $fh, "--\n-- Dumping data for table `$table`\n--\n\n" );
+
+				$columns = $wpdb->get_col( "SHOW COLUMNS FROM `$table`", 0 );
+				if ( empty( $columns ) ) {
+					continue;
+				}
+				$col_list = '`' . implode( '`,`', array_map( 'strval', $columns ) ) . '`';
+
+				$batch  = 1000;
+				$offset = 0;
+				while ( $offset < $count ) {
+					$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM `$table` LIMIT %d OFFSET %d", $batch, $offset ), ARRAY_A );
+					if ( empty( $rows ) ) {
+						break;
+					}
+
+					$values = [];
+					foreach ( $rows as $row ) {
+						$vals = [];
+						foreach ( $columns as $col ) {
+							$val = array_key_exists( $col, $row ) ? $row[ $col ] : null;
+							if ( is_null( $val ) ) {
+								$vals[] = 'NULL';
+							} else {
+								if ( is_bool( $val ) ) {
+									$val = (int) $val;
+								}
+								if ( is_numeric( $val ) && ! is_string( $val ) ) {
+									$vals[] = (string) $val;
+								} else {
+									$str = (string) $val;
+									$str = str_replace( ["\\", "\0", "\n", "\r", "\x1a"], ["\\\\", "\\0", "\\n", "\\r", "\\Z"], $str );
+									$str = str_replace( ["'"], ["\\'"], $str );
+									$vals[] = "'" . $str . "'";
+								}
+							}
+						}
+						$values[] = '(' . implode( ',', $vals ) . ')';
+					}
+
+					if ( ! empty( $values ) ) {
+						$sql = "INSERT INTO `$table` ($col_list) VALUES\n" . implode( ",\n", $values ) . ";\n";
+						fwrite( $fh, $sql );
+					}
+
+					$offset += $batch;
+				}
+
+				fwrite( $fh, "\n" );
+			}
+		}
+
+		fwrite( $fh, "SET foreign_key_checks=1;\n" );
+		fclose( $fh );
+		clearstatcache();
+
+		return file_exists( $file_path ) && filesize( $file_path ) > 0;
+	}
+}
+
+// Register WP-CLI commands if available.
+if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
+	\WP_CLI::add_command( 'dbvc dump-db', [ 'DBVC_Sync_Posts', 'dump_database' ] );
+	\WP_CLI::add_command( 'dbvc import-db', [ 'DBVC_Sync_Posts', 'import_database' ] );
+	\WP_CLI::add_command( 'dbvc backup-plugins', [ 'DBVC_Sync_Posts', 'backup_plugins' ] );
 }

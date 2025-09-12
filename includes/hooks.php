@@ -1,9 +1,9 @@
 <?php
 /**
- * Action hooks for DB Version Control 
- * 
- * @package   DB Version Control
- * @author    Robert DeVore <me@robertdevore.com>
+ * Action hooks for SR Dev Tools
+ *
+ * @package   SR Dev Tools
+ * @author    Chris Todhunter
  * @since     1.0.0
  */
 

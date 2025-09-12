@@ -136,6 +136,115 @@ function dbvc_render_export_page() {
 		}
 	}
 
+	// Handle Dump Database action.
+	if ( isset( $_POST['dbvc_dump_db'] ) && isset( $_POST['dbvc_dump_db_nonce'] ) && wp_verify_nonce( $_POST['dbvc_dump_db_nonce'], 'dbvc_dump_db_action' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'dbvc' ) );
+		}
+
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		if ( ! is_dir( $database_dir ) ) {
+			wp_mkdir_p( $database_dir );
+		}
+		$before = glob( $database_dir . '*.sql' );
+		$before_count = is_array( $before ) ? count( $before ) : 0;
+
+		DBVC_Sync_Posts::dump_database();
+		clearstatcache();
+
+		$after = glob( $database_dir . '*.sql' );
+		$after_count = is_array( $after ) ? count( $after ) : 0;
+		$created = max( 0, $after_count - $before_count );
+		$latest = '';
+		if ( ! empty( $after ) ) {
+			usort( $after, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
+			$latest = $after[0];
+		}
+
+		if ( $created > 0 && $latest ) {
+			echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Database dumped to: %s', 'dbvc' ), '<code>' . esc_html( $latest ) . '</code>' ) . '</p></div>';
+		} else {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Database dump failed or no new dump was created.', 'dbvc' ) . '</p></div>';
+		}
+	}
+
+	// Handle Import Database action.
+	if ( isset( $_POST['dbvc_import_db'] ) && isset( $_POST['dbvc_import_db_nonce'] ) && wp_verify_nonce( $_POST['dbvc_import_db_nonce'], 'dbvc_import_db_action' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'dbvc' ) );
+		}
+
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		if ( ! is_dir( $database_dir ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'No database directory found in the current theme.', 'dbvc' ) . '</p></div>';
+		} else {
+			$files = glob( $database_dir . '*.sql' );
+			if ( empty( $files ) ) {
+				echo '<div class="notice notice-error"><p>' . esc_html__( 'No SQL dump files found to import.', 'dbvc' ) . '</p></div>';
+			} else {
+				usort( $files, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
+				$latest = $files[0];
+				DBVC_Sync_Posts::import_database();
+				echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Import completed from: %s. Site URL and Home restored.', 'dbvc' ), '<code>' . esc_html( $latest ) . '</code>' ) . '</p></div>';
+			}
+		}
+	}
+
+	// Handle Delete Dump action.
+	if ( isset( $_POST['dbvc_delete_dump'] ) && isset( $_POST['dbvc_delete_dump_nonce'] ) && wp_verify_nonce( $_POST['dbvc_delete_dump_nonce'], 'dbvc_delete_dump_action' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'dbvc' ) );
+		}
+
+		$database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+		$dump_file    = isset( $_POST['dbvc_dump_file'] ) ? sanitize_text_field( wp_unslash( $_POST['dbvc_dump_file'] ) ) : '';
+		$dump_file    = basename( $dump_file ); // prevent traversal
+
+		if ( empty( $dump_file ) || ! preg_match( '/\.sql$/i', $dump_file ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Invalid dump file specified.', 'dbvc' ) . '</p></div>';
+		} else {
+			$full_path = $database_dir . $dump_file;
+			$dir_real  = realpath( $database_dir );
+			$file_real = is_file( $full_path ) ? realpath( $full_path ) : false;
+			if ( $dir_real && $file_real && strpos( $file_real, $dir_real ) === 0 && is_file( $file_real ) ) {
+				if ( @unlink( $file_real ) ) {
+					echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Deleted dump: %s', 'dbvc' ), '<code>' . esc_html( $dump_file ) . '</code>' ) . '</p></div>';
+				} else {
+					echo '<div class="notice notice-error"><p>' . sprintf( esc_html__( 'Could not delete file: %s', 'dbvc' ), '<code>' . esc_html( $dump_file ) . '</code>' ) . '</p></div>';
+				}
+			} else {
+				echo '<div class="notice notice-error"><p>' . esc_html__( 'Dump file not found or invalid path.', 'dbvc' ) . '</p></div>';
+			}
+		}
+	}
+
+	// Handle Backup Plugins action.
+	if ( isset( $_POST['dbvc_backup_plugins'] ) && isset( $_POST['dbvc_backup_plugins_nonce'] ) && wp_verify_nonce( $_POST['dbvc_backup_plugins_nonce'], 'dbvc_backup_plugins_action' ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'dbvc' ) );
+		}
+
+		$plugins_target = trailingslashit( get_stylesheet_directory() ) . 'resources/plugins/';
+		if ( ! is_dir( $plugins_target ) ) {
+			wp_mkdir_p( $plugins_target );
+		}
+		$before = glob( $plugins_target . '*.zip' );
+		$before_count = is_array( $before ) ? count( $before ) : 0;
+
+		DBVC_Sync_Posts::backup_plugins();
+		clearstatcache();
+
+		$after = glob( $plugins_target . '*.zip' );
+		$after_count = is_array( $after ) ? count( $after ) : 0;
+		$created = max( 0, $after_count - $before_count );
+
+		if ( $created > 0 ) {
+			echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Created %d plugin backup(s) in %s', 'dbvc' ), (int) $created, '<code>' . esc_html( $plugins_target ) . '</code>' ) . '</p></div>';
+		} else {
+			echo '<div class="notice notice-warning"><p>' . esc_html__( 'No new plugin backups were created.', 'dbvc' ) . '</p></div>';
+		}
+	}
+
 	// Get the current resolved path for display.
 	$resolved_path = dbvc_get_sync_path();
 		
@@ -185,6 +294,55 @@ function dbvc_render_export_page() {
             <h2><?php esc_html_e( 'Modules Pages', 'dbvc' ); ?></h2>
             <p><?php esc_html_e( 'Scan theme ACF field groups for fields starting with "Partial" and generate child pages under the "Modules" parent.', 'dbvc' ); ?></p>
             <?php submit_button( esc_html__( 'Generate modules pages', 'dbvc' ), 'secondary', 'dbvc_generate_modules' ); ?>
+        </form>
+
+        <hr />
+
+        <h2><?php esc_html_e( 'Database', 'dbvc' ); ?></h2>
+        <form method="post">
+            <?php wp_nonce_field( 'dbvc_dump_db_action', 'dbvc_dump_db_nonce' ); ?>
+            <p><?php esc_html_e( 'Dump the current database to the active theme\'s resources/database folder.', 'dbvc' ); ?></p>
+            <?php submit_button( esc_html__( 'Dump database', 'dbvc' ), 'secondary', 'dbvc_dump_db' ); ?>
+        </form>
+        <?php
+        // List available SQL dump files in theme resources/database folder.
+        $database_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
+        $dbvc_files = is_dir( $database_dir ) ? glob( $database_dir . '*.sql' ) : [];
+        if ( ! empty( $dbvc_files ) ) {
+            usort( $dbvc_files, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
+            echo '<h3>' . esc_html__( 'Available database dumps', 'dbvc' ) . '</h3>';
+            echo '<ul class="dbvc-dumps-list">';
+            foreach ( $dbvc_files as $dbvc_file ) {
+                $dbvc_basename = basename( $dbvc_file );
+                $dbvc_size     = size_format( @filesize( $dbvc_file ) );
+                $dbvc_time     = date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), @filemtime( $dbvc_file ) );
+                echo '<li>';
+                echo '<code>' . esc_html( $dbvc_basename ) . '</code> <small>(' . esc_html( $dbvc_size ) . ', ' . esc_html( $dbvc_time ) . ')</small> ';
+                echo '<form method="post" style="display:inline;margin-left:8px;">';
+                wp_nonce_field( 'dbvc_delete_dump_action', 'dbvc_delete_dump_nonce' );
+                echo '<input type="hidden" name="dbvc_dump_file" value="' . esc_attr( $dbvc_basename ) . '" />';
+                submit_button( esc_html__( 'Delete', 'dbvc' ), 'link delete', 'dbvc_delete_dump', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Delete this dump file?', 'dbvc' ) ) . "');" ] );
+                echo '</form>';
+                echo '</li>';
+            }
+            echo '</ul>';
+        } else {
+            echo '<p>' . esc_html__( 'No database dump files found.', 'dbvc' ) . '</p>';
+        }
+        ?>
+        <form method="post" style="margin-top: 10px;">
+            <?php wp_nonce_field( 'dbvc_import_db_action', 'dbvc_import_db_nonce' ); ?>
+            <p><?php esc_html_e( 'Import the most recent SQL dump from the theme resources/database folder. The Site URL and Home settings will be restored after import.', 'dbvc' ); ?></p>
+            <?php submit_button( esc_html__( 'Import database', 'dbvc' ), 'secondary', 'dbvc_import_db' ); ?>
+        </form>
+
+        <hr />
+
+        <h2><?php esc_html_e( 'Plugins', 'dbvc' ); ?></h2>
+        <form method="post">
+            <?php wp_nonce_field( 'dbvc_backup_plugins_action', 'dbvc_backup_plugins_nonce' ); ?>
+            <p><?php esc_html_e( 'Zip each plugin under wp-content/plugins into the theme\'s resources/plugins folder.', 'dbvc' ); ?></p>
+            <?php submit_button( esc_html__( 'Backup plugins', 'dbvc' ), 'secondary', 'dbvc_backup_plugins' ); ?>
         </form>
     </div>
 

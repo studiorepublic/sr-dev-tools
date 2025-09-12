@@ -2,8 +2,8 @@
 /**
  * Get the sync path for exports
  * 
- * @package   DB Version Control
- * @author    Robert DeVore <me@robertdevore.com>
+ * @package   SR Dev Tools
+ * @author    Chris Todhunter
  */
 
 // If this file is called directly, abort.
@@ -138,29 +138,57 @@ function dbvc_sanitize_json_data( $data ) {
  * @return bool True if safe, false otherwise.
  */
 function dbvc_is_safe_file_path( $file_path ) {
-	// Check for null bytes
-	if ( strpos( $file_path, chr( 0 ) ) !== false ) {
+	// Basic input sanity check
+	if ( ! is_string( $file_path ) || $file_path === '' ) {
 		return false;
 	}
-	
-	// Check for directory traversal
-	if ( strpos( $file_path, '..' ) !== false ) {
-		return false;
+
+	// Determine target directory for the file
+	$dir = dirname( $file_path );
+	if ( ! is_dir( $dir ) ) {
+		// Attempt to create the directory tree so we can place .htaccess
+		if ( function_exists( 'wp_mkdir_p' ) ) {
+			if ( ! wp_mkdir_p( $dir ) ) {
+				return false;
+			}
+		} else {
+			if ( ! @mkdir( $dir, 0755, true ) && ! is_dir( $dir ) ) {
+				return false;
+			}
+		}
 	}
-	
-	// Ensure file is within WordPress directory structure
-	$wp_path = realpath( ABSPATH );
-	$resolved_path = realpath( dirname( $file_path ) );
-	
-	if ( false === $resolved_path || strpos( $resolved_path, $wp_path ) !== 0 ) {
-		return false;
+
+	$htaccess_path = trailingslashit( $dir ) . '.htaccess';
+	$existing = is_readable( $htaccess_path ) ? file_get_contents( $htaccess_path ) : '';
+	$has_deny = false;
+	if ( is_string( $existing ) && $existing !== '' ) {
+		$lower = strtolower( $existing );
+		$has_deny = ( strpos( $lower, 'require all denied' ) !== false ) || ( strpos( $lower, 'deny from all' ) !== false );
 	}
-	
-	// Check file extension
-	$allowed_extensions = [ 'json' ];
-	$extension = pathinfo( $file_path, PATHINFO_EXTENSION );
-	
- return in_array( strtolower( $extension ), $allowed_extensions, true );
+
+	// If no .htaccess or not properly denying, append our protection block
+	if ( ! $has_deny ) {
+		$block = "\n# BEGIN DBVC\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Deny from all\n</IfModule>\n# END DBVC\n";
+		$write_ok = false;
+		if ( is_writable( $dir ) ) {
+			if ( file_exists( $htaccess_path ) && is_writable( $htaccess_path ) ) {
+				$write_ok = ( false !== file_put_contents( $htaccess_path, $existing . $block ) );
+			} else {
+				$write_ok = ( false !== file_put_contents( $htaccess_path, $block ) );
+			}
+		}
+		
+		if ( ! $write_ok ) {
+			return false;
+		}
+		
+		// Re-read to verify
+		$existing = is_readable( $htaccess_path ) ? file_get_contents( $htaccess_path ) : '';
+		$lower = is_string( $existing ) ? strtolower( $existing ) : '';
+		$has_deny = ( strpos( $lower, 'require all denied' ) !== false ) || ( strpos( $lower, 'deny from all' ) !== false );
+	}
+
+	return (bool) $has_deny;
 }
 
 /**

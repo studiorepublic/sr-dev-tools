@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name: DB Version Control
- * Description: Sync WordPress to version-controlled JSON files for easy Git workflows.
- * Version:     1.3.0
- * Author:      Studio Republic (based on original plugin by Robert DeVore
+ * Plugin Name: SR Dev Tools
+ * Description: Sync WordPress to version-controlled JSON files for easy Git workflows. Manage database dumps and plugin zip exports
+ * Version:     1.4.0
+ * Author:      Studio Republic (based on original plugin by Robert DeVore)
  * Author URI:  https://www.studiorepublic.com
  * Text Domain: dbvc
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.txt
- * Update URI:  https://github.com/studiorepublic/db-version-control/
+ * Update URI:  https://github.com/studiorepublic/sr-dev-tools/
  */
 
 // If this file is called directly, abort.
@@ -20,9 +20,9 @@ require 'vendor/plugin-update-checker/plugin-update-checker.php';
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
 $myUpdateChecker = PucFactory::buildUpdateChecker(
-	'https://github.com/studiorepublic/db-version-control/',
+	'https://github.com/studiorepublic/sr-dev-tools/',
 	__FILE__,
-	'db-version-control'
+	'sr-dev-tools'
 );
 
 // Set the branch that contains the stable release.
@@ -41,7 +41,7 @@ new WPComPluginHandler( plugin_basename( __FILE__ ), 'https://robertdevore.com/w
 define( 'DBVC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'DBVC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DBVC_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
-define( 'DBVC_PLUGIN_VERSION', '1.1.0' );
+define( 'DBVC_PLUGIN_VERSION', '1.4.0' );
 
 require_once DBVC_PLUGIN_PATH . 'includes/functions.php';
 require_once DBVC_PLUGIN_PATH . 'includes/class-sync-posts.php';
@@ -75,7 +75,7 @@ add_action( 'plugins_loaded', 'dbvc_load_textdomain' );
  * @return array
  */
 function dbvc_add_settings_link( $links ) {
-	$settings_link = '<a href="' . admin_url( 'admin.php?page=dbvc-export' ) . '">' . esc_html__( 'Settings', 'dbvc' ) . '</a>';
+	$settings_link = '<a href="' . admin_url( 'admin.php?page=sr-dev-tools' ) . '">' . esc_html__( 'Settings', 'dbvc' ) . '</a>';
 	array_unshift( $links, $settings_link );
 	return $links;
 }

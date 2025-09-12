@@ -1,8 +1,10 @@
-# DB Version Control
+# SR Dev Tools
 
-**Sync WordPress to version-controlled JSON files for easy Git workflows.**
+**Sync WordPress to version-controlled JSON files for easy Git workflows.**<br>
+**Export and import database**<br>
+**Export plugins to zip files**
 
-[![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)](https://wordpress.org/) [![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple.svg)](https://php.net/) [![License](https://img.shields.io/badge/License-GPL%20v2%2B-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+
 
 ## Overview
 
@@ -36,6 +38,12 @@ Instead of wrestling with database dumps or complex migration tools, this plugin
 ### Create module pages
 
 - **Module Page Creation**: Easily create module pages directly from the plugin interface
+
+### Database Tools
+
+- **Dump Database**: Create SQL dumps to your active theme's `resources/database/` folder
+- **List & Delete Dumps**: View all available `.sql` files in the admin with size and timestamp, and delete individual dumps securely
+- **One-click Import**: Import the most recent dump; the Site URL and Home settings are restored automatically
 
 ### Enterprise Ready
 
@@ -106,6 +114,14 @@ git init
 git add .
 git commit -m "Initial content export"
 ```
+
+### 5. Manage Database Dumps
+
+Go to the Database section under **DBVC Export**:
+- Click "Dump database" to create a new SQL dump in your theme's `resources/database/` folder
+- See a list of existing dumps with file size and modified time
+- Use the Delete action next to a dump to remove it securely
+- Click "Import database" to import the most recent dump (Site URL and Home are restored automatically)
 
 ## WP-CLI Commands
 

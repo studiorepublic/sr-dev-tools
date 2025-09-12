@@ -1,9 +1,9 @@
 <?php
 /**
  * Get the sync path for exports
- * 
- * @package   DB Version Control
- * @author    Robert DeVore <me@robertdevore.com>
+ *
+ * @package   SR Dev Tools
+ * @author    Chris Todhunter
  * @since     1.0.0
  */
 
