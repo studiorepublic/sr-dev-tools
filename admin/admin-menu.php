@@ -18,15 +18,15 @@ if ( ! defined( 'WPINC' ) ) {
  * @since  1.0.0
  * @return void
  */
-function dbvc_register_admin_menu() {
+function srdt_register_admin_menu() {
 	add_menu_page(
-		esc_html__( 'SR Dev Tools', 'dbvc' ),
-		esc_html__( 'SR Dev Tools', 'dbvc' ),
+		esc_html__( 'SR Dev Tools', 'srdt' ),
+		esc_html__( 'SR Dev Tools', 'srdt' ),
 		'manage_options',
 		'sr-dev-tools',
-		'dbvc_render_export_page',
+		'srdt_render_export_page',
 		'dashicons-download',
 		80
 	);
 }
-add_action( 'admin_menu', 'dbvc_register_admin_menu' );
+add_action( 'admin_menu', 'srdt_register_admin_menu' );

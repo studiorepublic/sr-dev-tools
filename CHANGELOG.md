@@ -18,7 +18,7 @@
 - **Added**: Comprehensive error handling and safety checks for theme JSON operations in `includes/class-sync-posts.php`
 - **Added**: Security validation functions for file paths and JSON data sanitization in `includes/functions.php`
 - **Added**: FSE options to the select field in the admin settings in `admin/admin-page.php`
-- **Updated**: Text strings for localization in `languages/dbvc.pot`
+- **Updated**: Text strings for localization in `languages/srdt.pot`
 
 ## 1.0.0
 

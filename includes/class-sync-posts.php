@@ -20,7 +20,7 @@ if ( ! defined( 'WPINC' ) ) {
  * @since     1.0.0
  * @return string
  */
-class DBVC_Sync_Posts {
+class SRDT_Sync_Posts {
 
 	/**
 	 * Get the selected post types for export/import.
@@ -29,7 +29,7 @@ class DBVC_Sync_Posts {
 	 * @return array
 	 */
 	public static function get_supported_post_types() {
-		$selected_types = get_option( 'dbvc_post_types', [] );
+		$selected_types = get_option( 'srdt_post_types', [] );
 
 		// If no post types are selected, default to post, page, and FSE types.
 		if ( empty( $selected_types ) ) {
@@ -37,7 +37,7 @@ class DBVC_Sync_Posts {
 		}
 
 		// Allow other plugins to modify supported post types.
-		return apply_filters( 'dbvc_supported_post_types', $selected_types );
+		return apply_filters( 'srdt_supported_post_types', $selected_types );
 	}
 
     /**
@@ -119,16 +119,16 @@ class DBVC_Sync_Posts {
 		}
 
 		// Allow other plugins to modify the export data
-		$data = apply_filters( 'dbvc_export_post_data', $data, $post_id, $post );
+		$data = apply_filters( 'srdt_export_post_data', $data, $post_id, $post );
 		
 		// Sanitize the final data
-		$data = dbvc_sanitize_json_data( $data );
+		$data = srdt_sanitize_json_data( $data );
 
-        $path = dbvc_get_sync_path( $post->post_type );
+        $path = srdt_get_sync_path( $post->post_type );
 
 		if ( ! is_dir( $path ) ) {
 			if ( ! wp_mkdir_p( $path ) ) {
-				error_log( 'DBVC: Failed to create directory: ' . $path );
+				error_log( 'SRDT: Failed to create directory: ' . $path );
 				return;
 			}
 		}
@@ -136,28 +136,28 @@ class DBVC_Sync_Posts {
 		$file_path = $path . sanitize_file_name( $post->post_type . '-' . $post_id . '.json' );
 		
 		// Allow other plugins to modify the file path.
-		$file_path = apply_filters( 'dbvc_export_post_file_path', $file_path, $post_id, $post );
+		$file_path = apply_filters( 'srdt_export_post_file_path', $file_path, $post_id, $post );
 		
 		// Validate the final file path
-		if ( ! dbvc_is_safe_file_path( $file_path ) ) {
-			error_log( 'DBVC: Unsafe file path detected: ' . $file_path );
+		if ( ! srdt_is_safe_file_path( $file_path ) ) {
+			error_log( 'SRDT: Unsafe file path detected: ' . $file_path );
 			return;
 		}
 
 		$json_content = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 		if ( false === $json_content ) {
-			error_log( 'DBVC: Failed to encode JSON for post ' . $post_id );
+			error_log( 'SRDT: Failed to encode JSON for post ' . $post_id );
 			return;
 		}
 		
 		$result = file_put_contents( $file_path, $json_content );
 		if ( false === $result ) {
-			error_log( 'DBVC: Failed to write file: ' . $file_path );
+			error_log( 'SRDT: Failed to write file: ' . $file_path );
 			return;
 		}
 
 		// Allow other plugins to perform additional actions after export.
-		do_action( 'dbvc_after_export_post', $post_id, $post, $file_path );
+		do_action( 'srdt_after_export_post', $post_id, $post, $file_path );
 	}
 
     /**
@@ -170,7 +170,7 @@ class DBVC_Sync_Posts {
         $supported_types = self::get_supported_post_types();
         
         foreach ( $supported_types as $post_type ) {
-            $path  = dbvc_get_sync_path( $post_type );
+            $path  = srdt_get_sync_path( $post_type );
             $files = glob( $path . '*.json' );
             
             if ( empty( $files ) ) {
@@ -277,7 +277,7 @@ class DBVC_Sync_Posts {
         ];
 
         // Allow other plugins to modify excluded keys
-        $excluded_keys = apply_filters( 'dbvc_excluded_option_keys', $excluded_keys );
+        $excluded_keys = apply_filters( 'srdt_excluded_option_keys', $excluded_keys );
 
         $filtered = array_diff_key( $all_options, array_flip( $excluded_keys ) );
         
@@ -285,12 +285,12 @@ class DBVC_Sync_Posts {
         $filtered = self::sanitize_options_data( $filtered );
         
         // Allow other plugins to modify the options data before export
-        $filtered = apply_filters( 'dbvc_export_options_data', $filtered );
+        $filtered = apply_filters( 'srdt_export_options_data', $filtered );
 
-        $path = dbvc_get_sync_path();
+        $path = srdt_get_sync_path();
         if ( ! is_dir( $path ) ) {
             if ( ! wp_mkdir_p( $path ) ) {
-				error_log( 'DBVC: Failed to create directory: ' . $path );
+				error_log( 'SRDT: Failed to create directory: ' . $path );
 				return;
 			}
         }
@@ -298,28 +298,28 @@ class DBVC_Sync_Posts {
         $file_path = $path . 'options.json';
         
         // Allow other plugins to modify the options file path.
-        $file_path = apply_filters( 'dbvc_export_options_file_path', $file_path );
+        $file_path = apply_filters( 'srdt_export_options_file_path', $file_path );
         
         // Validate file path
-		if ( ! dbvc_is_safe_file_path( $file_path ) ) {
-			error_log( 'DBVC: Unsafe file path detected: ' . $file_path );
+		if ( ! srdt_is_safe_file_path( $file_path ) ) {
+			error_log( 'SRDT: Unsafe file path detected: ' . $file_path );
 			return;
 		}
 
 		$json_content = wp_json_encode( $filtered, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 		if ( false === $json_content ) {
-			error_log( 'DBVC: Failed to encode options JSON' );
+			error_log( 'SRDT: Failed to encode options JSON' );
 			return;
 		}
 
         $result = file_put_contents( $file_path, $json_content );
 		if ( false === $result ) {
-			error_log( 'DBVC: Failed to write options file: ' . $file_path );
+			error_log( 'SRDT: Failed to write options file: ' . $file_path );
 			return;
 		}
         
         // Allow other plugins to perform additional actions after options export
-        do_action( 'dbvc_after_export_options', $file_path, $filtered );
+        do_action( 'srdt_after_export_options', $file_path, $filtered );
     }
 
 	/**
@@ -341,7 +341,7 @@ class DBVC_Sync_Posts {
 				// Basic sanitization - more specific sanitization may be needed based on meta key
 				if ( is_serialized( $value ) ) {
 					$unserialized = maybe_unserialize( $value );
-					$sanitized[ $key ][] = dbvc_sanitize_json_data( $unserialized );
+					$sanitized[ $key ][] = srdt_sanitize_json_data( $unserialized );
 				} else {
 					$sanitized[ $key ][] = sanitize_textarea_field( $value );
 				}
@@ -367,9 +367,9 @@ class DBVC_Sync_Posts {
 			
 			if ( is_serialized( $value ) ) {
 				$unserialized = maybe_unserialize( $value );
-				$sanitized[ $key ] = dbvc_sanitize_json_data( $unserialized );
+				$sanitized[ $key ] = srdt_sanitize_json_data( $unserialized );
 			} else {
-				$sanitized[ $key ] = dbvc_sanitize_json_data( $value );
+				$sanitized[ $key ] = srdt_sanitize_json_data( $value );
 			}
 		}
 		
@@ -383,7 +383,7 @@ class DBVC_Sync_Posts {
      * @return void
      */
     public static function import_options_from_json() {
-        $file_path = dbvc_get_sync_path() . 'options.json';
+        $file_path = srdt_get_sync_path() . 'options.json';
         if ( ! file_exists( $file_path ) ) {
             return;
         }
@@ -418,13 +418,13 @@ class DBVC_Sync_Posts {
             ];
             
             // Allow other plugins to modify individual menu data
-            $data[] = apply_filters( 'dbvc_export_menu_data', $menu_data, $menu );
+            $data[] = apply_filters( 'srdt_export_menu_data', $menu_data, $menu );
         }
         
         // Allow other plugins to modify all menus data
-        $data = apply_filters( 'dbvc_export_menus_data', $data );
+        $data = apply_filters( 'srdt_export_menus_data', $data );
 
-        $path = dbvc_get_sync_path();
+        $path = srdt_get_sync_path();
         if ( ! is_dir( $path ) ) {
             wp_mkdir_p( $path );
         }
@@ -432,7 +432,7 @@ class DBVC_Sync_Posts {
         $file_path = $path . 'menus.json';
         
         // Allow other plugins to modify the menus file path
-        $file_path = apply_filters( 'dbvc_export_menus_file_path', $file_path );
+        $file_path = apply_filters( 'srdt_export_menus_file_path', $file_path );
 
         file_put_contents(
             $file_path,
@@ -440,7 +440,7 @@ class DBVC_Sync_Posts {
         );
         
         // Allow other plugins to perform additional actions after menus export
-        do_action( 'dbvc_after_export_menus', $file_path, $data );
+        do_action( 'srdt_after_export_menus', $file_path, $data );
     }
 
     /**
@@ -450,7 +450,7 @@ class DBVC_Sync_Posts {
      * @return void
      */
     public static function import_menus_from_json() {
-        $file = dbvc_get_sync_path() . 'menus.json';
+        $file = srdt_get_sync_path() . 'menus.json';
         if ( ! file_exists( $file ) ) return;
 
         $menus = json_decode( file_get_contents( $file ), true );
@@ -527,7 +527,7 @@ class DBVC_Sync_Posts {
         
         // Collect all JSON files from all post type directories
         foreach ( $supported_types as $post_type ) {
-            $path = dbvc_get_sync_path( $post_type );
+            $path = srdt_get_sync_path( $post_type );
             $files = glob( $path . '*.json' );
             if ( ! empty( $files ) ) {
                 $all_files = array_merge( $all_files, $files );
@@ -697,10 +697,10 @@ class DBVC_Sync_Posts {
 					$theme_data['theme_json'] = [];
 				}
 			} catch ( Exception $e ) {
-				error_log( 'DBVC: Failed to get theme JSON data: ' . $e->getMessage() );
+				error_log( 'SRDT: Failed to get theme JSON data: ' . $e->getMessage() );
 				$theme_data['theme_json'] = [];
 			} catch ( Error $e ) {
-				error_log( 'DBVC: Fatal error getting theme JSON data: ' . $e->getMessage() );
+				error_log( 'SRDT: Fatal error getting theme JSON data: ' . $e->getMessage() );
 				$theme_data['theme_json'] = [];
 			}
 		} else {
@@ -708,12 +708,12 @@ class DBVC_Sync_Posts {
 		}
 
 		// Allow other plugins to modify FSE theme data.
-		$theme_data = apply_filters( 'dbvc_export_fse_theme_data', $theme_data );
+		$theme_data = apply_filters( 'srdt_export_fse_theme_data', $theme_data );
 
-		$path = dbvc_get_sync_path( 'theme' );
+		$path = srdt_get_sync_path( 'theme' );
 		if ( ! is_dir( $path ) ) {
 			if ( ! wp_mkdir_p( $path ) ) {
-				error_log( 'DBVC: Failed to create theme directory: ' . $path );
+				error_log( 'SRDT: Failed to create theme directory: ' . $path );
 				return;
 			}
 		}
@@ -721,27 +721,27 @@ class DBVC_Sync_Posts {
 		$file_path = $path . 'theme-data.json';
 		
 		// Allow other plugins to modify the FSE theme file path.
-		$file_path = apply_filters( 'dbvc_export_fse_theme_file_path', $file_path );
+		$file_path = apply_filters( 'srdt_export_fse_theme_file_path', $file_path );
 		
 		// Validate file path.
-		if ( ! dbvc_is_safe_file_path( $file_path ) ) {
-			error_log( 'DBVC: Unsafe file path detected: ' . $file_path );
+		if ( ! srdt_is_safe_file_path( $file_path ) ) {
+			error_log( 'SRDT: Unsafe file path detected: ' . $file_path );
 			return;
 		}
 
 		$json_content = wp_json_encode( $theme_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 		if ( false === $json_content ) {
-			error_log( 'DBVC: Failed to encode FSE theme JSON' );
+			error_log( 'SRDT: Failed to encode FSE theme JSON' );
 			return;
 		}
 
 		$result = file_put_contents( $file_path, $json_content );
 		if ( false === $result ) {
-			error_log( 'DBVC: Failed to write FSE theme file: ' . $file_path );
+			error_log( 'SRDT: Failed to write FSE theme file: ' . $file_path );
 			return;
 		}
 
-		do_action( 'dbvc_after_export_fse_theme_data', $file_path, $theme_data );
+		do_action( 'srdt_after_export_fse_theme_data', $file_path, $theme_data );
 	}
 
 	/**
@@ -756,7 +756,7 @@ class DBVC_Sync_Posts {
 			return;
 		}
 
-		$file_path = dbvc_get_sync_path( 'theme' ) . 'theme-data.json';
+		$file_path = srdt_get_sync_path( 'theme' ) . 'theme-data.json';
 		if ( ! file_exists( $file_path ) ) {
 			return;
 		}
@@ -772,7 +772,7 @@ class DBVC_Sync_Posts {
 		}
 
 		// Allow other plugins to handle additional FSE import data.
-		do_action( 'dbvc_after_import_fse_theme_data', $theme_data );
+		do_action( 'srdt_after_import_fse_theme_data', $theme_data );
 	}
 
 	/**
@@ -794,7 +794,7 @@ class DBVC_Sync_Posts {
 		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/database/';
 		if ( ! is_dir( $target_dir ) ) {
 			if ( ! wp_mkdir_p( $target_dir ) ) {
-				error_log( 'DBVC: Failed to create database resources directory: ' . $target_dir );
+				error_log( 'SRDT: Failed to create database resources directory: ' . $target_dir );
 				return;
 			}
 		}
@@ -803,8 +803,8 @@ class DBVC_Sync_Posts {
 		$file_path = $target_dir . $filename;
 
 		// Validate file path
-		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
-			error_log( 'DBVC: Unsafe database dump file path detected: ' . $file_path );
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $file_path ) ) {
+			error_log( 'SRDT: Unsafe database dump file path detected: ' . $file_path );
 			return;
 		}
 
@@ -819,7 +819,7 @@ class DBVC_Sync_Posts {
 		// Fallback to mysqldump or PHP exporter
 		if ( ! $export_ok ) {
 			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
-				error_log( 'DBVC: Database constants missing; cannot perform dump. Falling back to PHP exporter if possible.' );
+				error_log( 'SRDT: Database constants missing; cannot perform dump. Falling back to PHP exporter if possible.' );
 			} else {
 				$host   = DB_HOST;
 				$port   = null;
@@ -855,7 +855,7 @@ class DBVC_Sync_Posts {
 					$return = 0;
 					exec( $cmd, $output, $return );
 					if ( 0 !== $return ) {
-						error_log( 'DBVC: mysqldump failed: ' . implode( "\n", $output ) );
+						error_log( 'SRDT: mysqldump failed: ' . implode( "\n", $output ) );
 					} else {
 						$export_ok = file_exists( $file_path ) && filesize( $file_path ) > 0;
 					}
@@ -869,11 +869,11 @@ class DBVC_Sync_Posts {
 		}
 
 		if ( ! $export_ok ) {
-			error_log( 'DBVC: Database export failed to create a valid dump file.' );
+			error_log( 'SRDT: Database export failed to create a valid dump file.' );
 			return;
 		}
 
-		do_action( 'dbvc_after_dump_database', $file_path );
+		do_action( 'srdt_after_dump_database', $file_path );
 	}
 
 	/**
@@ -908,8 +908,8 @@ class DBVC_Sync_Posts {
 		} );
 		$file_path = $files[0];
 
-		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
-			error_log( 'DBVC: Unsafe database import file path detected: ' . $file_path );
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $file_path ) ) {
+			error_log( 'SRDT: Unsafe database import file path detected: ' . $file_path );
 			return;
 		}
 
@@ -927,7 +927,7 @@ class DBVC_Sync_Posts {
 		// Fallback to mysql client
 		if ( ! $import_ok ) {
 			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
-				error_log( 'DBVC: Database constants missing; cannot perform import.' );
+				error_log( 'SRDT: Database constants missing; cannot perform import.' );
 				return;
 			}
 
@@ -958,7 +958,7 @@ class DBVC_Sync_Posts {
 			$return = 0;
 			exec( $cmd, $output, $return );
 			if ( 0 !== $return ) {
-				error_log( 'DBVC: mysql import failed: ' . implode( "\n", $output ) );
+				error_log( 'SRDT: mysql import failed: ' . implode( "\n", $output ) );
 				return;
 			}
 
@@ -969,7 +969,7 @@ class DBVC_Sync_Posts {
 		if ( $import_ok ) {
 			update_option( 'siteurl', $old_siteurl );
 			update_option( 'home', $old_home );
-			do_action( 'dbvc_after_import_database', $file_path, $old_siteurl, $old_home );
+			do_action( 'srdt_after_import_database', $file_path, $old_siteurl, $old_home );
 		}
 	}
 
@@ -996,7 +996,7 @@ class DBVC_Sync_Posts {
 		$target_dir = trailingslashit( get_stylesheet_directory() ) . 'resources/plugins/';
 		if ( ! is_dir( $target_dir ) ) {
 			if ( ! wp_mkdir_p( $target_dir ) ) {
-				error_log( 'DBVC: Failed to create plugins resources directory: ' . $target_dir );
+				error_log( 'SRDT: Failed to create plugins resources directory: ' . $target_dir );
 				return;
 			}
 		}
@@ -1013,15 +1013,15 @@ class DBVC_Sync_Posts {
 			$slug = basename( $dir );
 			$zip_path = $target_dir . $slug . '-' . $timestamp . '.zip';
 
-			if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $zip_path ) ) {
-				error_log( 'DBVC: Unsafe plugins backup zip path detected: ' . $zip_path );
+			if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $zip_path ) ) {
+				error_log( 'SRDT: Unsafe plugins backup zip path detected: ' . $zip_path );
 				continue;
 			}
 
 			if ( $zip_available ) {
 				$zip = new ZipArchive();
 				if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
-					error_log( 'DBVC: Failed to create zip: ' . $zip_path );
+					error_log( 'SRDT: Failed to create zip: ' . $zip_path );
 					continue;
 				}
 
@@ -1045,15 +1045,15 @@ class DBVC_Sync_Posts {
 				$return = 0;
 				exec( $cmd, $output, $return );
 				if ( 0 !== $return ) {
-					error_log( 'DBVC: zip command failed for ' . $slug . ': ' . implode( "\n", $output ) );
+					error_log( 'SRDT: zip command failed for ' . $slug . ': ' . implode( "\n", $output ) );
 					continue;
 				}
 			}
 
-			do_action( 'dbvc_after_backup_plugin', $zip_path, $dir );
+			do_action( 'srdt_after_backup_plugin', $zip_path, $dir );
 		}
 
-		do_action( 'dbvc_after_backup_plugins', $target_dir );
+		do_action( 'srdt_after_backup_plugins', $target_dir );
 	}
 
 	/**
@@ -1064,7 +1064,7 @@ class DBVC_Sync_Posts {
 	 * @return bool True on success.
 	 */
 	private static function dump_database_via_php( $file_path ) {
-		if ( function_exists( 'dbvc_is_safe_file_path' ) && ! dbvc_is_safe_file_path( $file_path ) ) {
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $file_path ) ) {
 			return false;
 		}
 
@@ -1078,11 +1078,11 @@ class DBVC_Sync_Posts {
 
 		$fh = @fopen( $file_path, 'w' );
 		if ( ! $fh ) {
-			error_log( 'DBVC: Cannot open dump file for writing: ' . $file_path );
+			error_log( 'SRDT: Cannot open dump file for writing: ' . $file_path );
 			return false;
 		}
 
-		$header  = "-- DBVC SQL Dump\n";
+		$header  = "-- SRDT SQL Dump\n";
 		$header .= "-- Host: " . ( defined( 'DB_HOST' ) ? DB_HOST : 'unknown' ) . "\n";
 		$header .= "-- Generation Time: " . gmdate( 'Y-m-d H:i:s' ) . " UTC\n\n";
 		$header .= "SET NAMES utf8mb4;\nSET foreign_key_checks=0;\nSET sql_mode='NO_AUTO_VALUE_ON_ZERO';\nSET time_zone='+00:00';\n\n";
@@ -1166,7 +1166,7 @@ class DBVC_Sync_Posts {
 
 // Register WP-CLI commands if available.
 if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
-	\WP_CLI::add_command( 'dbvc dump-db', [ 'DBVC_Sync_Posts', 'dump_database' ] );
-	\WP_CLI::add_command( 'dbvc import-db', [ 'DBVC_Sync_Posts', 'import_database' ] );
-	\WP_CLI::add_command( 'dbvc backup-plugins', [ 'DBVC_Sync_Posts', 'backup_plugins' ] );
+	\WP_CLI::add_command( 'srdt dump-db', [ 'SRDT_Sync_Posts', 'dump_database' ] );
+	\WP_CLI::add_command( 'srdt import-db', [ 'SRDT_Sync_Posts', 'import_database' ] );
+	\WP_CLI::add_command( 'srdt backup-plugins', [ 'SRDT_Sync_Posts', 'backup_plugins' ] );
 }

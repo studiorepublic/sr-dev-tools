@@ -20,10 +20,10 @@ if ( ! defined( 'WPINC' ) ) {
  * @return string
  */
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
-	WP_CLI::add_command( 'dbvc', 'DBVC_WP_CLI_Commands' );
+	WP_CLI::add_command( 'srdt', 'SRDT_WP_CLI_Commands' );
 }
 
-class DBVC_WP_CLI_Commands {
+class SRDT_WP_CLI_Commands {
 
 	/**
 	 * Export all posts to JSON.
@@ -34,9 +34,9 @@ class DBVC_WP_CLI_Commands {
 	 * : Number of posts to process per batch. Use 0 to disable batching. Default: 50
 	 *
 	 * ## EXAMPLES
-	 * wp dbvc export
-	 * wp dbvc export --batch-size=100
-	 * wp dbvc export --batch-size=0
+	 * wp srdt export
+	 * wp srdt export --batch-size=100
+	 * wp srdt export --batch-size=0
      * 
      * @since  1.0.0
      * @return void
@@ -46,12 +46,12 @@ class DBVC_WP_CLI_Commands {
 		$no_batch = ( 0 === $batch_size );
 		
 		// Export options and menus first (these are typically small)
-        DBVC_Sync_Posts::export_options_to_json();
-        DBVC_Sync_Posts::export_menus_to_json();
+        SRDT_Sync_Posts::export_options_to_json();
+        SRDT_Sync_Posts::export_menus_to_json();
         
         if ( $no_batch ) {
 			// Legacy behavior - export all at once.
-			$post_types = DBVC_Sync_Posts::get_supported_post_types();
+			$post_types = SRDT_Sync_Posts::get_supported_post_types();
 			$posts = get_posts( [
 				'post_type'      => $post_types,
 				'posts_per_page' => -1,
@@ -61,7 +61,7 @@ class DBVC_WP_CLI_Commands {
 			WP_CLI::log( "Exporting all posts at once (no batching)" );
 
 			foreach ( $posts as $post ) {
-				DBVC_Sync_Posts::export_post_to_json( $post->ID, $post );
+				SRDT_Sync_Posts::export_post_to_json( $post->ID, $post );
 			}
 			
 			WP_CLI::success( sprintf( 'All %d posts exported to JSON. Post types: %s', count( $posts ), implode( ', ', $post_types ) ) );
@@ -73,7 +73,7 @@ class DBVC_WP_CLI_Commands {
 			WP_CLI::log( "Starting batch export with batch size: {$batch_size}" );
 			
 			do {
-				$result = DBVC_Sync_Posts::export_posts_batch( $batch_size, $offset );
+				$result = SRDT_Sync_Posts::export_posts_batch( $batch_size, $offset );
 				$total_processed += $result['processed'];
 				$offset = $result['offset'];
 				
@@ -94,7 +94,7 @@ class DBVC_WP_CLI_Commands {
 				
 			} while ( $result['remaining'] > 0 && $result['processed'] > 0 );
 			
-			$post_types = DBVC_Sync_Posts::get_supported_post_types();
+			$post_types = SRDT_Sync_Posts::get_supported_post_types();
 			WP_CLI::success( sprintf( 
 				'Batch export completed! Processed %d posts across post types: %s', 
 				$total_processed,
@@ -112,9 +112,9 @@ class DBVC_WP_CLI_Commands {
 	 * : Number of files to process per batch. Use 0 to disable batching. Default: 50
 	 *
 	 * ## EXAMPLES
-	 * wp dbvc import
-	 * wp dbvc import --batch-size=25
-	 * wp dbvc import --batch-size=0
+	 * wp srdt import
+	 * wp srdt import --batch-size=25
+	 * wp srdt import --batch-size=0
      * 
      * @since  1.0.0
      * @return void
@@ -126,13 +126,13 @@ class DBVC_WP_CLI_Commands {
 		$no_batch = ( 0 === $batch_size );
 		
 		// Import options and menus first
-        DBVC_Sync_Posts::import_options_from_json();
-        DBVC_Sync_Posts::import_menus_from_json();
+        SRDT_Sync_Posts::import_options_from_json();
+        SRDT_Sync_Posts::import_menus_from_json();
         
         if ( $no_batch ) {
 			// Legacy behavior - import all at once
 			WP_CLI::log( "Importing all files at once (no batching)" );
-			DBVC_Sync_Posts::import_all_json_files();
+			SRDT_Sync_Posts::import_all_json_files();
 			WP_CLI::success( 'All JSON files imported to DB.' );
 		} else {
 			// Batch processing
@@ -142,7 +142,7 @@ class DBVC_WP_CLI_Commands {
 			WP_CLI::log( "Starting batch import with batch size: {$batch_size}" );
 			
 			do {
-				$result = DBVC_Sync_Posts::import_posts_batch( $batch_size, $offset );
+				$result = SRDT_Sync_Posts::import_posts_batch( $batch_size, $offset );
 				$total_processed += $result['processed'];
 				$offset = $result['offset'];
 				
