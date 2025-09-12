@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.4.0
+
+- Added: functionality to export plugins as zip files and to dump/import database
+- Changed: Renamed plugin namespace from dbvc/dvbc to srdt across the codebase (constants, class names, functions, and text domain)
+- Changed: Default sync path now resolves to the active theme's sync/ directory instead of the plugin folder when no custom path is set
+- Improved: Updated hooks to use SRDT_Sync_Posts and ensured exports run on relevant WordPress events under the new namespace
+- Internal: Updated plugin headers and localization domain to srdt
 
 ## 1.3.0
 
