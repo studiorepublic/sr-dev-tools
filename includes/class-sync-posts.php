@@ -889,99 +889,782 @@ class SRDT_Sync_Posts {
 	 * Import the most recent SQL dump from theme sync/database.
 	 *
 	 * Restores siteurl and home options after import.
-	 * Uses WP-CLI if available, otherwise falls back to mysql client.
+	 * Uses multiple strategies for maximum reliability.
 	 *
 	 * @since 1.2.0
 	 * @param array $args       Positional CLI args (unused).
 	 * @param array $assoc_args Associative CLI args (unused).
-	 * @return void
+	 * @return bool True on success, false on failure.
 	 */
 	public static function import_database( $args = [], $assoc_args = [] ) {
 		// Only allow via CLI or admins.
 		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
-			return;
+			error_log( 'SRDT: Database import requires admin privileges or WP-CLI context.' );
+			return false;
 		}
 
+		// Find and validate the SQL file
+		$file_path = self::get_latest_sql_file();
+		if ( ! $file_path ) {
+			error_log( 'SRDT: No SQL dump file found for import.' );
+			return false;
+		}
+
+		// Validate the SQL file
+		$file_info = self::validate_sql_file( $file_path );
+		if ( ! $file_info['valid'] ) {
+			error_log( 'SRDT: SQL file validation failed: ' . $file_info['error'] );
+			return false;
+		}
+
+		// Validate database connection
+		if ( ! self::validate_database_connection() ) {
+			error_log( 'SRDT: Database connection validation failed.' );
+			return false;
+		}
+
+		// Store current critical options
+		$old_siteurl = get_option( 'siteurl' );
+		$old_home    = get_option( 'home' );
+		$old_stylesheet = get_option( 'stylesheet' );
+		$old_template = get_option( 'template' );
+		$pre_import_table_count = self::get_table_count();
+
+		// Log import start
+		error_log( sprintf( 'SRDT: Starting database import from %s (%.2f MB)', basename( $file_path ), $file_info['size_mb'] ) );
+
+		$import_result = false;
+		$import_method = '';
+
+		// Try import methods in order of preference
+		$methods = [
+			'wp_cli'       => 'import_via_wp_cli',
+			'mysql_client' => 'import_via_mysql_client',
+			'php'          => 'import_via_php'
+		];
+
+		foreach ( $methods as $method_name => $method_function ) {
+			if ( method_exists( __CLASS__, $method_function ) ) {
+				error_log( "SRDT: Attempting import via {$method_name}" );
+				$import_result = self::$method_function( $file_path, $file_info );
+				
+				if ( $import_result ) {
+					$import_method = $method_name;
+					error_log( "SRDT: Import successful via {$method_name}" );
+					break;
+				} else {
+					error_log( "SRDT: Import failed via {$method_name}, trying next method" );
+				}
+			}
+		}
+
+		if ( ! $import_result ) {
+			error_log( 'SRDT: All import methods failed.' );
+			return false;
+		}
+
+		// Verify import success
+		$verification = self::verify_import_success( $pre_import_table_count, $file_info );
+		if ( ! $verification['success'] ) {
+			error_log( 'SRDT: Import verification failed: ' . $verification['message'] );
+			return false;
+		}
+
+		// Restore critical URLs and theme with enhanced reliability
+		$restore_result = self::restore_critical_options( $old_siteurl, $old_home, $old_stylesheet, $old_template );
+		if ( ! $restore_result['success'] ) {
+			error_log( 'SRDT: Failed to restore critical options: ' . $restore_result['message'] );
+			// Continue anyway as the import was successful
+		}
+
+		// Log success
+		error_log( sprintf( 'SRDT: Database import completed successfully via %s. %s', $import_method, $verification['message'] ) );
+
+		// Fire action hook
+		do_action( 'srdt_after_import_database', $file_path, $old_siteurl, $old_home, $import_method );
+
+		return true;
+	}
+
+	/**
+	 * Get the latest SQL file from the sync directory.
+	 *
+	 * @since 1.2.1
+	 * @return string|false File path on success, false on failure.
+	 */
+	private static function get_latest_sql_file() {
 		$source_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/database/';
+		
 		if ( ! is_dir( $source_dir ) ) {
-			return;
+			return false;
 		}
 
 		$files = glob( $source_dir . '*.sql' );
 		if ( empty( $files ) ) {
-			return;
+			return false;
 		}
 
+		// Sort by modification time, newest first
 		usort( $files, function( $a, $b ) {
 			return filemtime( $b ) <=> filemtime( $a );
 		} );
+
 		$file_path = $files[0];
 
+		// Validate file path security
 		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $file_path ) ) {
-			error_log( 'SRDT: Unsafe database import file path detected: ' . $file_path );
-			return;
+			return false;
 		}
 
-		$old_siteurl = get_option( 'siteurl' );
-		$old_home    = get_option( 'home' );
+		return $file_path;
+	}
 
-		$import_ok = false;
+	/**
+	 * Validate SQL file for import.
+	 *
+	 * @since 1.2.1
+	 * @param string $file_path Path to SQL file.
+	 * @return array Validation result with 'valid', 'error', 'size_mb', 'line_count'.
+	 */
+	private static function validate_sql_file( $file_path ) {
+		$result = [
+			'valid'      => false,
+			'error'      => '',
+			'size_mb'    => 0,
+			'line_count' => 0
+		];
 
-		// Prefer WP-CLI if available
-		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
-			\WP_CLI::runcommand( 'db import ' . escapeshellarg( $file_path ), [ 'return' => 'all', 'exit_error' => false ] );
-			$import_ok = true; // If command returned, assume import attempted
+		if ( ! file_exists( $file_path ) ) {
+			$result['error'] = 'File does not exist';
+			return $result;
 		}
 
-		// Fallback to mysql client
-		if ( ! $import_ok ) {
-			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
-				error_log( 'SRDT: Database constants missing; cannot perform import.' );
-				return;
+		if ( ! is_readable( $file_path ) ) {
+			$result['error'] = 'File is not readable';
+			return $result;
+		}
+
+		$file_size = filesize( $file_path );
+		if ( $file_size === false || $file_size === 0 ) {
+			$result['error'] = 'File is empty or unreadable';
+			return $result;
+		}
+
+		$result['size_mb'] = $file_size / 1024 / 1024;
+
+		// Check if file is too large (configurable limit)
+		$max_size_mb = apply_filters( 'srdt_max_import_file_size_mb', 500 );
+		if ( $result['size_mb'] > $max_size_mb ) {
+			$result['error'] = sprintf( 'File too large (%.2f MB > %d MB limit)', $result['size_mb'], $max_size_mb );
+			return $result;
+		}
+
+		// Basic SQL file validation - check first few lines
+		$handle = fopen( $file_path, 'r' );
+		if ( ! $handle ) {
+			$result['error'] = 'Cannot open file for reading';
+			return $result;
+		}
+
+		$has_sql_content = false;
+		$line_count = 0;
+		$lines_to_check = 50; // Check first 50 lines
+
+		while ( ( $line = fgets( $handle ) ) !== false && $line_count < $lines_to_check ) {
+			$line_count++;
+			$trimmed = trim( $line );
+			
+			// Skip empty lines and comments
+			if ( empty( $trimmed ) || strpos( $trimmed, '--' ) === 0 || strpos( $trimmed, '#' ) === 0 ) {
+				continue;
 			}
 
-			$host   = DB_HOST;
-			$port   = null;
-			$socket = null;
-			if ( false !== strpos( $host, ':' ) ) {
-				list( $host_part, $extra ) = explode( ':', $host, 2 );
-				$host = $host_part;
-				if ( is_numeric( $extra ) ) {
-					$port = (int) $extra;
-				} else {
-					$socket = $extra;
+			// Look for SQL keywords
+			if ( preg_match( '/^(CREATE|INSERT|DROP|ALTER|SET|USE)\s+/i', $trimmed ) ) {
+				$has_sql_content = true;
+				break;
+			}
+		}
+
+		// Count total lines for progress tracking
+		while ( fgets( $handle ) !== false ) {
+			$line_count++;
+		}
+		fclose( $handle );
+
+		$result['line_count'] = $line_count;
+
+		if ( ! $has_sql_content ) {
+			$result['error'] = 'File does not appear to contain valid SQL content';
+			return $result;
+		}
+
+		$result['valid'] = true;
+		return $result;
+	}
+
+	/**
+	 * Validate database connection.
+	 *
+	 * @since 1.2.1
+	 * @return bool True if connection is valid.
+	 */
+	private static function validate_database_connection() {
+		global $wpdb;
+
+		// Check if required constants are defined
+		if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
+			return false;
+		}
+
+		// Test database connection
+		$test_query = $wpdb->get_var( "SELECT 1" );
+		if ( $test_query !== '1' ) {
+			return false;
+		}
+
+		// Check if we can write to the database
+		$test_table = $wpdb->prefix . 'srdt_import_test_' . time();
+		$create_result = $wpdb->query( "CREATE TEMPORARY TABLE `{$test_table}` (id INT)" );
+		if ( $create_result === false ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Import database via WP-CLI.
+	 *
+	 * @since 1.2.1
+	 * @param string $file_path Path to SQL file.
+	 * @param array  $file_info File information from validation.
+	 * @return bool True on success.
+	 */
+	private static function import_via_wp_cli( $file_path, $file_info ) {
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI || ! class_exists( 'WP_CLI' ) ) {
+			return false;
+		}
+
+		try {
+			$result = \WP_CLI::runcommand( 
+				'db import ' . escapeshellarg( $file_path ), 
+				[ 
+					'return' => 'all', 
+					'exit_error' => false,
+					'launch' => false
+				] 
+			);
+
+			// Check if command was successful
+			if ( $result->return_code === 0 ) {
+				return true;
+			} else {
+				error_log( 'SRDT: WP-CLI import failed with return code ' . $result->return_code );
+				if ( ! empty( $result->stderr ) ) {
+					error_log( 'SRDT: WP-CLI error: ' . $result->stderr );
 				}
+				return false;
 			}
+		} catch ( Exception $e ) {
+			error_log( 'SRDT: WP-CLI import exception: ' . $e->getMessage() );
+			return false;
+		}
+	}
 
-			$cmd  = 'mysql';
-			$cmd .= ' -h ' . escapeshellarg( $host );
-			if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
-			if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
-			$cmd .= ' -u ' . escapeshellarg( DB_USER );
-			// Do not pass password on command line; use MYSQL_PWD environment variable instead.
-			$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' < ' . escapeshellarg( $file_path ) . ' 2>&1';
+	/**
+	 * Import database via mysql client.
+	 *
+	 * @since 1.2.1
+	 * @param string $file_path Path to SQL file.
+	 * @param array  $file_info File information from validation.
+	 * @return bool True on success.
+	 */
+	private static function import_via_mysql_client( $file_path, $file_info ) {
+		// Check if mysql client is available
+		if ( ! function_exists( 'exec' ) ) {
+			return false;
+		}
+
+		$mysql_available = false;
+		if ( function_exists( 'shell_exec' ) ) {
+			$which = @shell_exec( 'command -v mysql 2>/dev/null' );
+			$mysql_available = is_string( $which ) && trim( $which ) !== '';
+		}
+
+		if ( ! $mysql_available ) {
+			return false;
+		}
+
+		// Parse database host
+		$host = DB_HOST;
+		$port = null;
+		$socket = null;
+		
+		if ( false !== strpos( $host, ':' ) ) {
+			list( $host_part, $extra ) = explode( ':', $host, 2 );
+			$host = $host_part;
+			if ( is_numeric( $extra ) ) {
+				$port = (int) $extra;
+			} else {
+				$socket = $extra;
+			}
+		}
+
+		// Create temporary MySQL config file for security
+		$config_file = self::create_mysql_config_file( $host, $port, $socket );
+		if ( ! $config_file ) {
+			return false;
+		}
+
+		try {
+			// Build mysql command
+			$cmd = 'mysql --defaults-extra-file=' . escapeshellarg( $config_file );
+			$cmd .= ' --default-character-set=utf8mb4';
+			$cmd .= ' ' . escapeshellarg( DB_NAME );
+			$cmd .= ' < ' . escapeshellarg( $file_path );
+			$cmd .= ' 2>&1';
 
 			$output = [];
-			$return = 0;
-			$env = null;
-			if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
-				$env = array_merge($_ENV, ['MYSQL_PWD' => DB_PASSWORD]);
-			}
-			exec( $cmd, $output, $return, $env );
-			if ( 0 !== $return ) {
-				error_log( 'SRDT: mysql import failed: ' . implode( "\n", $output ) );
-				return;
-			}
+			$return_code = 0;
+			exec( $cmd, $output, $return_code );
 
-			$import_ok = true;
+			// Clean up config file
+			@unlink( $config_file );
+
+			if ( $return_code === 0 ) {
+				return true;
+			} else {
+				error_log( 'SRDT: MySQL client import failed with return code ' . $return_code );
+				if ( ! empty( $output ) ) {
+					error_log( 'SRDT: MySQL client error: ' . implode( "\n", $output ) );
+				}
+				return false;
+			}
+		} catch ( Exception $e ) {
+			@unlink( $config_file );
+			error_log( 'SRDT: MySQL client import exception: ' . $e->getMessage() );
+			return false;
+		}
+	}
+
+	/**
+	 * Import database via pure PHP (enhanced version).
+	 *
+	 * @since 1.2.1
+	 * @param string $file_path Path to SQL file.
+	 * @param array  $file_info File information from validation.
+	 * @return bool True on success.
+	 */
+	private static function import_via_php( $file_path, $file_info ) {
+		global $wpdb;
+
+		@set_time_limit( 0 );
+		@ini_set( 'memory_limit', '512M' );
+
+		$handle = fopen( $file_path, 'r' );
+		if ( ! $handle ) {
+			error_log( 'SRDT: Cannot open SQL file for PHP import' );
+			return false;
 		}
 
-		// Restore critical URLs
-		if ( $import_ok ) {
-			update_option( 'siteurl', $old_siteurl );
-			update_option( 'home', $old_home );
-			do_action( 'srdt_after_import_database', $file_path, $old_siteurl, $old_home );
+		$query = '';
+		$line_number = 0;
+		$queries_executed = 0;
+		$errors = 0;
+		$max_errors = 10; // Stop after too many errors
+
+		// Progress tracking
+		$progress_interval = max( 1000, intval( $file_info['line_count'] / 20 ) );
+
+		while ( ( $line = fgets( $handle ) ) !== false ) {
+			$line_number++;
+			$line = trim( $line );
+
+			// Skip empty lines and comments
+			if ( empty( $line ) || strpos( $line, '--' ) === 0 || strpos( $line, '#' ) === 0 ) {
+				continue;
+			}
+
+			// Handle SET statements and other single-line commands
+			if ( preg_match( '/^(SET|USE)\s+/i', $line ) && substr( $line, -1 ) === ';' ) {
+				$result = $wpdb->query( rtrim( $line, ';' ) );
+				if ( $result === false ) {
+					$errors++;
+					error_log( "SRDT: PHP import error on line {$line_number}: " . $wpdb->last_error );
+					if ( $errors >= $max_errors ) {
+						break;
+					}
+				}
+				continue;
+			}
+
+			// Accumulate multi-line queries
+			$query .= $line . "\n";
+
+			// Execute when we hit a semicolon at the end of a line
+			if ( substr( $line, -1 ) === ';' ) {
+				$query = trim( $query );
+				if ( ! empty( $query ) ) {
+					$result = $wpdb->query( rtrim( $query, ';' ) );
+					if ( $result === false ) {
+						$errors++;
+						error_log( "SRDT: PHP import error on line {$line_number}: " . $wpdb->last_error );
+						if ( $errors >= $max_errors ) {
+							break;
+						}
+					} else {
+						$queries_executed++;
+					}
+				}
+				$query = '';
+
+				// Progress logging
+				if ( $line_number % $progress_interval === 0 ) {
+					$progress = ( $line_number / $file_info['line_count'] ) * 100;
+					error_log( sprintf( 'SRDT: PHP import progress: %.1f%% (%d queries executed)', $progress, $queries_executed ) );
+				}
+			}
 		}
+
+		fclose( $handle );
+
+		if ( $errors >= $max_errors ) {
+			error_log( "SRDT: PHP import stopped due to too many errors ({$errors})" );
+			return false;
+		}
+
+		error_log( "SRDT: PHP import completed. {$queries_executed} queries executed, {$errors} errors" );
+		return $errors < $max_errors;
+	}
+
+	/**
+	 * Create temporary MySQL configuration file.
+	 *
+	 * @since 1.2.1
+	 * @param string   $host   Database host.
+	 * @param int|null $port   Database port.
+	 * @param string   $socket Database socket.
+	 * @return string|false Path to config file or false on failure.
+	 */
+	private static function create_mysql_config_file( $host, $port = null, $socket = null ) {
+		$config_file = tempnam( sys_get_temp_dir(), 'srdt_mysql_' );
+		if ( ! $config_file ) {
+			return false;
+		}
+
+		$config_content = "[client]\n";
+		$config_content .= "user=" . DB_USER . "\n";
+		
+		if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
+			$config_content .= "password=" . DB_PASSWORD . "\n";
+		}
+		
+		$config_content .= "host=" . $host . "\n";
+		
+		if ( $port ) {
+			$config_content .= "port=" . $port . "\n";
+		}
+		
+		if ( $socket ) {
+			$config_content .= "socket=" . $socket . "\n";
+		}
+
+		$result = file_put_contents( $config_file, $config_content );
+		if ( $result === false ) {
+			@unlink( $config_file );
+			return false;
+		}
+
+		// Set restrictive permissions
+		chmod( $config_file, 0600 );
+
+		return $config_file;
+	}
+
+	/**
+	 * Verify import success.
+	 *
+	 * @since 1.2.1
+	 * @param int   $pre_import_table_count Table count before import.
+	 * @param array $file_info              File information.
+	 * @return array Verification result with 'success' and 'message'.
+	 */
+	private static function verify_import_success( $pre_import_table_count, $file_info ) {
+		$result = [
+			'success' => false,
+			'message' => ''
+		];
+
+		// Check if database is accessible
+		global $wpdb;
+		$test_query = $wpdb->get_var( "SELECT 1" );
+		if ( $test_query !== '1' ) {
+			$result['message'] = 'Database connection lost after import';
+			return $result;
+		}
+
+		// Check table count
+		$post_import_table_count = self::get_table_count();
+		if ( $post_import_table_count === false ) {
+			$result['message'] = 'Cannot verify table count after import';
+			return $result;
+		}
+
+		// Basic WordPress tables check
+		$required_tables = [ 'posts', 'users', 'options' ];
+		$missing_tables = [];
+		
+		foreach ( $required_tables as $table ) {
+			$full_table_name = $wpdb->prefix . $table;
+			$exists = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $full_table_name ) );
+			if ( ! $exists ) {
+				$missing_tables[] = $full_table_name;
+			}
+		}
+
+		if ( ! empty( $missing_tables ) ) {
+			$result['message'] = 'Missing required tables: ' . implode( ', ', $missing_tables );
+			return $result;
+		}
+
+		$result['success'] = true;
+		$result['message'] = sprintf( 
+			'Import verified: %d tables present (was %d)', 
+			$post_import_table_count, 
+			$pre_import_table_count 
+		);
+
+		return $result;
+	}
+
+	/**
+	 * Get database table count.
+	 *
+	 * @since 1.2.1
+	 * @return int|false Table count or false on failure.
+	 */
+	private static function get_table_count() {
+		global $wpdb;
+		
+		$count = $wpdb->get_var( "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '" . DB_NAME . "'" );
+		
+		return $count !== null ? (int) $count : false;
+	}
+
+	/**
+	 * Restore critical options after database import with enhanced reliability.
+	 *
+	 * @since 1.2.2
+	 * @param string $old_siteurl    Original siteurl value.
+	 * @param string $old_home       Original home value.
+	 * @param string $old_stylesheet Original stylesheet (theme) value.
+	 * @param string $old_template   Original template (parent theme) value.
+	 * @return array Result with 'success' and 'message'.
+	 */
+	private static function restore_critical_options( $old_siteurl, $old_home, $old_stylesheet = '', $old_template = '' ) {
+		global $wpdb;
+
+		$result = [
+			'success' => false,
+			'message' => ''
+		];
+
+		// Log the restoration attempt
+		error_log( sprintf( 'SRDT: Attempting to restore critical options - siteurl: %s, home: %s, stylesheet: %s, template: %s', 
+			$old_siteurl, $old_home, $old_stylesheet, $old_template ) );
+
+		// Clear WordPress caches to ensure fresh data
+		if ( function_exists( 'wp_cache_flush' ) ) {
+			wp_cache_flush();
+		}
+
+		// Clear options cache specifically
+		if ( function_exists( 'wp_cache_delete' ) ) {
+			wp_cache_delete( 'alloptions', 'options' );
+			wp_cache_delete( 'siteurl', 'options' );
+			wp_cache_delete( 'home', 'options' );
+			wp_cache_delete( 'stylesheet', 'options' );
+			wp_cache_delete( 'template', 'options' );
+		}
+
+		// Verify we have valid values to restore
+		if ( empty( $old_siteurl ) || empty( $old_home ) ) {
+			$result['message'] = 'Invalid original values provided';
+			return $result;
+		}
+
+		// Use direct database queries to bypass caching issues
+		$options_table = $wpdb->prefix . 'options';
+		
+		// Update siteurl
+		$siteurl_result = $wpdb->update(
+			$options_table,
+			[ 'option_value' => $old_siteurl ],
+			[ 'option_name' => 'siteurl' ],
+			[ '%s' ],
+			[ '%s' ]
+		);
+
+		// Update home
+		$home_result = $wpdb->update(
+			$options_table,
+			[ 'option_value' => $old_home ],
+			[ 'option_name' => 'home' ],
+			[ '%s' ],
+			[ '%s' ]
+		);
+
+		// Update theme options if provided
+		$stylesheet_result = false;
+		$template_result = false;
+		
+		if ( ! empty( $old_stylesheet ) ) {
+			$stylesheet_result = $wpdb->update(
+				$options_table,
+				[ 'option_value' => $old_stylesheet ],
+				[ 'option_name' => 'stylesheet' ],
+				[ '%s' ],
+				[ '%s' ]
+			);
+		}
+		
+		if ( ! empty( $old_template ) ) {
+			$template_result = $wpdb->update(
+				$options_table,
+				[ 'option_value' => $old_template ],
+				[ 'option_name' => 'template' ],
+				[ '%s' ],
+				[ '%s' ]
+			);
+		}
+
+		// Log the database update results
+		error_log( sprintf( 'SRDT: Direct DB update results - siteurl: %s, home: %s, stylesheet: %s, template: %s', 
+			$siteurl_result !== false ? 'success' : 'failed',
+			$home_result !== false ? 'success' : 'failed',
+			! empty( $old_stylesheet ) ? ( $stylesheet_result !== false ? 'success' : 'failed' ) : 'skipped',
+			! empty( $old_template ) ? ( $template_result !== false ? 'success' : 'failed' ) : 'skipped'
+		) );
+
+		// If direct updates failed, try insert (in case the options don't exist)
+		if ( $siteurl_result === false ) {
+			$siteurl_insert = $wpdb->replace(
+				$options_table,
+				[
+					'option_name'  => 'siteurl',
+					'option_value' => $old_siteurl,
+					'autoload'     => 'yes'
+				],
+				[ '%s', '%s', '%s' ]
+			);
+			error_log( 'SRDT: siteurl insert result: ' . ( $siteurl_insert !== false ? 'success' : 'failed' ) );
+		}
+
+		if ( $home_result === false ) {
+			$home_insert = $wpdb->replace(
+				$options_table,
+				[
+					'option_name'  => 'home',
+					'option_value' => $old_home,
+					'autoload'     => 'yes'
+				],
+				[ '%s', '%s', '%s' ]
+			);
+			error_log( 'SRDT: home insert result: ' . ( $home_insert !== false ? 'success' : 'failed' ) );
+		}
+
+		// Handle theme option fallbacks if needed
+		if ( ! empty( $old_stylesheet ) && $stylesheet_result === false ) {
+			$stylesheet_insert = $wpdb->replace(
+				$options_table,
+				[
+					'option_name'  => 'stylesheet',
+					'option_value' => $old_stylesheet,
+					'autoload'     => 'yes'
+				],
+				[ '%s', '%s', '%s' ]
+			);
+			error_log( 'SRDT: stylesheet insert result: ' . ( $stylesheet_insert !== false ? 'success' : 'failed' ) );
+		}
+
+		if ( ! empty( $old_template ) && $template_result === false ) {
+			$template_insert = $wpdb->replace(
+				$options_table,
+				[
+					'option_name'  => 'template',
+					'option_value' => $old_template,
+					'autoload'     => 'yes'
+				],
+				[ '%s', '%s', '%s' ]
+			);
+			error_log( 'SRDT: template insert result: ' . ( $template_insert !== false ? 'success' : 'failed' ) );
+		}
+
+		// Clear caches again after updates
+		if ( function_exists( 'wp_cache_flush' ) ) {
+			wp_cache_flush();
+		}
+
+		// Force WordPress to reload options
+		if ( function_exists( 'wp_load_alloptions' ) ) {
+			wp_load_alloptions( true ); // Force refresh
+		}
+
+		// Verify the options were actually updated
+		$verification_attempts = 3;
+		$verification_success = false;
+
+		for ( $i = 0; $i < $verification_attempts; $i++ ) {
+			// Clear cache before each verification attempt
+			if ( function_exists( 'wp_cache_delete' ) ) {
+				wp_cache_delete( 'alloptions', 'options' );
+				wp_cache_delete( 'siteurl', 'options' );
+				wp_cache_delete( 'home', 'options' );
+			}
+
+			// Get fresh values from database
+			$current_siteurl = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$options_table} WHERE option_name = %s", 'siteurl' ) );
+			$current_home = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$options_table} WHERE option_name = %s", 'home' ) );
+
+			error_log( sprintf( 'SRDT: Verification attempt %d - Current siteurl: %s, Current home: %s', 
+				$i + 1, $current_siteurl, $current_home ) );
+
+			if ( $current_siteurl === $old_siteurl && $current_home === $old_home ) {
+				$verification_success = true;
+				break;
+			}
+
+			// Wait a moment before next attempt
+			if ( $i < $verification_attempts - 1 ) {
+				usleep( 500000 ); // 0.5 seconds
+			}
+		}
+
+		if ( $verification_success ) {
+			$result['success'] = true;
+			$theme_message = '';
+			if ( ! empty( $old_stylesheet ) || ! empty( $old_template ) ) {
+				$theme_parts = [];
+				if ( ! empty( $old_stylesheet ) ) {
+					$theme_parts[] = "stylesheet to {$old_stylesheet}";
+				}
+				if ( ! empty( $old_template ) ) {
+					$theme_parts[] = "template to {$old_template}";
+				}
+				$theme_message = ' and ' . implode( ' and ', $theme_parts );
+			}
+			$result['message'] = sprintf( 'Successfully restored siteurl to %s and home to %s%s', $old_siteurl, $old_home, $theme_message );
+			error_log( 'SRDT: Critical options restoration verified successfully' );
+		} else {
+			$result['message'] = sprintf( 
+				'Failed to verify restoration - Expected siteurl: %s, home: %s. Current siteurl: %s, home: %s',
+				$old_siteurl, $old_home, $current_siteurl ?? 'null', $current_home ?? 'null'
+			);
+			error_log( 'SRDT: Critical options restoration verification failed: ' . $result['message'] );
+		}
+
+		return $result;
 	}
 
 	/**
@@ -1015,6 +1698,26 @@ class SRDT_Sync_Posts {
 		$dirs = glob( trailingslashit( $plugins_root ) . '*', GLOB_ONLYDIR );
 		if ( empty( $dirs ) ) {
 			return 0;
+		}
+
+		// Clean up zip files that don't have matching plugin directories
+		$existing_zips = glob( $target_dir . '*.zip' );
+		if ( ! empty( $existing_zips ) ) {
+			// Get current plugin directory names (slugs)
+			$current_plugin_slugs = array_map( 'basename', $dirs );
+			
+			foreach ( $existing_zips as $zip_file ) {
+				$zip_basename = basename( $zip_file, '.zip' );
+				
+				// If this zip file doesn't have a corresponding plugin directory, remove it
+				if ( ! in_array( $zip_basename, $current_plugin_slugs, true ) ) {
+					if ( @unlink( $zip_file ) ) {
+						error_log( 'SRDT: Removed orphaned plugin backup: ' . basename( $zip_file ) );
+					} else {
+						error_log( 'SRDT: Failed to remove orphaned plugin backup: ' . basename( $zip_file ) );
+					}
+				}
+			}
 		}
 
 		$timestamp = gmdate( 'Ymd-His' );

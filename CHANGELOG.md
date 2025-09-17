@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 1.4.2
+
+- Enhanced: Database import functionality now restores current theme options (stylesheet and template) after import
+- Added: Theme restoration logic with fallback mechanisms and comprehensive logging
+- Improved: Database import process now preserves both site URLs and active theme configuration
+
 ## 1.4.1
 
 - Better zip file handling

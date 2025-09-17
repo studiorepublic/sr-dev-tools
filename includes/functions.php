@@ -11,6 +11,12 @@ if ( ! defined( 'WPINC' ) ) {
     die;
 }
 
+add_action( 'cli_init', function() {
+$options=[];
+    $plugins = WP_CLI::runcommand('plugin list --format=json', $options);
+    var_dump($plugins);
+    die();
+});
 /**
  * Get the sync path for exports
  * 
