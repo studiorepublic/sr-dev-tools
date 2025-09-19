@@ -11,6 +11,9 @@
 - **Added**: Additional file exclusions for plugin backups (*.tmp, *.log files)
 - **Updated**: Admin interface text to reflect tar.gz format
 - **Updated**: Plugin description and documentation to mention tar.gz archives
+- Enhanced: Database import functionality now restores current theme options (stylesheet and template) after import
+- Added: Theme restoration logic with fallback mechanisms and comprehensive logging
+- Improved: Database import process now preserves both site URLs and active theme configuration
 
 ## 1.4.1
 

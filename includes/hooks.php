@@ -299,7 +299,9 @@ add_action( 'edited_term', 'srdt_handle_term_changes', 10, 0 );
 add_action( 'delete_term', 'srdt_handle_term_changes', 10, 0 );
 add_action( 'update_option_srdt_sync_path', 'srdt_handle_plugin_changes', 10, 0 );
 add_action( 'update_option_srdt_post_types', 'srdt_handle_plugin_changes', 10, 0 );
-add_action( 'updated_option', 'srdt_handle_option_updates', 10, 3 );
+add_action( 'init', function() {
+    add_action( 'updated_option', 'srdt_handle_option_updates', 10, 3 );
+});
 add_action( 'wp_update_nav_menu', 'srdt_handle_menu_updates', 10, 2 );
 add_action( 'save_post_nav_menu_item', 'srdt_handle_menu_item_save', 10, 1 );
 add_action( 'delete_post', 'srdt_handle_menu_item_deletion', 10, 1 );
