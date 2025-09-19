@@ -23,6 +23,25 @@ if ( ! defined( 'WPINC' ) ) {
 class SRDT_Sync_Posts {
 
 	/**
+	 * Check if we're in production environment and should block operations.
+	 * 
+	 * @since  1.0.0
+	 * @return bool True if in production and should block, false otherwise.
+	 */
+	private static function is_production_blocked() {
+		$wp_env = defined( 'WP_ENV' ) ? WP_ENV : ( getenv( 'WP_ENV' ) ?: 'production' );
+		if ( 'production' === $wp_env ) {
+			// Remove sync folder if it exists
+			$sync_path = srdt_get_sync_path();
+			if ( is_dir( $sync_path ) ) {
+				srdt_remove_directory_recursive( $sync_path );
+			}
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Get the selected post types for export/import.
 	 * 
 	 * @since  1.0.0
@@ -260,7 +279,7 @@ class SRDT_Sync_Posts {
     public static function export_options_to_json() {
 		// Check user capabilities for options export (skip for WP-CLI)
 		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
-			if ( ! current_user_can( 'manage_options' ) ) {
+			if ( ! current_user_can( 'SR' ) ) {
 				return;
 			}
 		}
@@ -671,7 +690,7 @@ class SRDT_Sync_Posts {
 
 		// Check user capabilities for FSE export (skip for WP-CLI).
 		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
-			if ( ! current_user_can( 'edit_theme_options' ) ) {
+			if ( ! current_user_can( 'SR' ) ) {
 				return;
 			}
 		}
@@ -752,7 +771,7 @@ class SRDT_Sync_Posts {
 	 */
 	public static function import_fse_theme_data() {
 		// Check user capabilities for FSE import.
-		if ( ! current_user_can( 'edit_theme_options' ) ) {
+		if ( ! current_user_can( 'SR' ) ) {
 			return;
 		}
 
@@ -779,6 +798,7 @@ class SRDT_Sync_Posts {
 	 * Dump the database to theme sync/database directory.
 	 *
 	 * Creates a SQL dump using WP-CLI if available, otherwise falls back to mysqldump.
+	 * The SQL dump is then compressed into a tar.gz archive for better compression and compatibility.
 	 *
 	 * @since 1.2.0
 	 * @param array $args       Positional CLI args (unused).
@@ -786,8 +806,16 @@ class SRDT_Sync_Posts {
 	 * @return void
 	 */
 	public static function dump_database( $args = [], $assoc_args = [] ) {
+		// Check for production environment
+		if ( self::is_production_blocked() ) {
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				\WP_CLI::error( 'SR Dev Tools is not allowed in production environments.' );
+			}
+			return;
+		}
+
 		// Only allow via CLI or admins.
-		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'SR' ) ) {
 			return;
 		}
 
@@ -799,12 +827,30 @@ class SRDT_Sync_Posts {
 			}
 		}
 
-		$filename  = 'database-' . gmdate( 'Ymd-His' ) . '.sql';
-		$file_path = $target_dir . $filename;
+		// Check if tar command is available
+		$tar_available = false;
+		if ( function_exists( 'shell_exec' ) ) {
+			$which = @shell_exec( 'command -v tar 2>/dev/null' );
+			$tar_available = is_string( $which ) && trim( $which ) !== '';
+		}
 
-		// Validate file path
-		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $file_path ) ) {
-			error_log( 'SRDT: Unsafe database dump file path detected: ' . $file_path );
+		if ( ! $tar_available ) {
+			error_log( 'SRDT: tar command not available for database backup compression' );
+			return;
+		}
+
+		$sql_filename = 'database-' . gmdate( 'Ymd-His' ) . '.sql';
+		$tar_filename = 'database-' . gmdate( 'Ymd-His' ) . '.tar.gz';
+		$temp_sql_path = $target_dir . $sql_filename;
+		$final_tar_path = $target_dir . $tar_filename;
+
+		// Validate file paths
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $temp_sql_path ) ) {
+			error_log( 'SRDT: Unsafe database dump file path detected: ' . $temp_sql_path );
+			return;
+		}
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $final_tar_path ) ) {
+			error_log( 'SRDT: Unsafe database tar file path detected: ' . $final_tar_path );
 			return;
 		}
 
@@ -812,8 +858,8 @@ class SRDT_Sync_Posts {
 
 		// Prefer WP-CLI if available
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
-			\WP_CLI::runcommand( 'db export ' . escapeshellarg( $file_path ), [ 'return' => 'all', 'exit_error' => false ] );
-			$export_ok = file_exists( $file_path ) && filesize( $file_path ) > 0;
+			\WP_CLI::runcommand( 'db export ' . escapeshellarg( $temp_sql_path ), [ 'return' => 'all', 'exit_error' => false ] );
+			$export_ok = file_exists( $temp_sql_path ) && filesize( $temp_sql_path ) > 0;
 		}
 
 		// Fallback to mysqldump or PHP exporter
@@ -856,7 +902,7 @@ class SRDT_Sync_Posts {
 
 					$cmd  = 'mysqldump --defaults-extra-file=' . escapeshellarg( $tmp_opt_file );
 					$cmd .= ' --single-transaction --quick --lock-tables=false';
-					$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' > ' . escapeshellarg( $file_path ) . ' 2>&1';
+					$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' > ' . escapeshellarg( $temp_sql_path ) . ' 2>&1';
 
 					$output = [];
 					$return = 0;
@@ -866,28 +912,59 @@ class SRDT_Sync_Posts {
 					if ( 0 !== $return ) {
 						error_log( 'SRDT: mysqldump failed: ' . implode( "\n", $output ) );
 					} else {
-						$export_ok = file_exists( $file_path ) && filesize( $file_path ) > 0;
+						$export_ok = file_exists( $temp_sql_path ) && filesize( $temp_sql_path ) > 0;
 					}
 				}
 			}
 
 			// Final fallback: pure-PHP exporter
 			if ( ! $export_ok ) {
-				$export_ok = self::dump_database_via_php( $file_path );
+				$export_ok = self::dump_database_via_php( $temp_sql_path );
 			}
 		}
 
 		if ( ! $export_ok ) {
 			error_log( 'SRDT: Database export failed to create a valid dump file.' );
+			// Clean up temp file if it exists
+			if ( file_exists( $temp_sql_path ) ) {
+				@unlink( $temp_sql_path );
+			}
 			return;
 		}
 
-		do_action( 'srdt_after_dump_database', $file_path );
+		// Compress the SQL file using tar
+		$cmd = 'cd ' . escapeshellarg( $target_dir ) . ' && tar -czf ' . escapeshellarg( $tar_filename ) . ' ' . escapeshellarg( $sql_filename ) . ' 2>&1';
+		$output = [];
+		$return = 0;
+		exec( $cmd, $output, $return );
+
+		if ( 0 !== $return ) {
+			error_log( 'SRDT: tar compression failed for database dump: ' . implode( "\n", $output ) );
+			// Clean up temp file
+			if ( file_exists( $temp_sql_path ) ) {
+				@unlink( $temp_sql_path );
+			}
+			return;
+		}
+
+		// Remove the temporary SQL file
+		if ( file_exists( $temp_sql_path ) ) {
+			@unlink( $temp_sql_path );
+		}
+
+		// Verify the tar.gz file was created successfully
+		if ( ! file_exists( $final_tar_path ) || filesize( $final_tar_path ) === 0 ) {
+			error_log( 'SRDT: Database tar.gz file was not created successfully: ' . $final_tar_path );
+			return;
+		}
+
+		do_action( 'srdt_after_dump_database', $final_tar_path );
 	}
 
 	/**
 	 * Import the most recent SQL dump from theme sync/database.
 	 *
+	 * Extracts tar.gz database backups and imports the SQL file.
 	 * Restores siteurl and home options after import.
 	 * Uses WP-CLI if available, otherwise falls back to mysql client.
 	 *
@@ -898,7 +975,7 @@ class SRDT_Sync_Posts {
 	 */
 	public static function import_database( $args = [], $assoc_args = [] ) {
 		// Only allow via CLI or admins.
-		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'SR' ) ) {
 			return;
 		}
 
@@ -907,7 +984,11 @@ class SRDT_Sync_Posts {
 			return;
 		}
 
-		$files = glob( $source_dir . '*.sql' );
+		// Look for tar.gz files first, then fall back to .sql files for backward compatibility
+		$tar_files = glob( $source_dir . '*.tar.gz' );
+		$sql_files = glob( $source_dir . '*.sql' );
+		$files = array_merge( $tar_files, $sql_files );
+		
 		if ( empty( $files ) ) {
 			return;
 		}
@@ -925,11 +1006,61 @@ class SRDT_Sync_Posts {
 		$old_siteurl = get_option( 'siteurl' );
 		$old_home    = get_option( 'home' );
 
+		$sql_file_path = $file_path;
+		$temp_sql_file = null;
+
+		// If it's a tar.gz file, extract it first
+		if ( preg_match( '/\.tar\.gz$/i', $file_path ) ) {
+			// Check if tar command is available
+			$tar_available = false;
+			if ( function_exists( 'shell_exec' ) ) {
+				$which = @shell_exec( 'command -v tar 2>/dev/null' );
+				$tar_available = is_string( $which ) && trim( $which ) !== '';
+			}
+
+			if ( ! $tar_available ) {
+				error_log( 'SRDT: tar command not available for database import extraction' );
+				return;
+			}
+
+			// Extract the tar.gz file to get the SQL file
+			$cmd = 'cd ' . escapeshellarg( $source_dir ) . ' && tar -tzf ' . escapeshellarg( basename( $file_path ) ) . ' 2>&1';
+			$output = [];
+			$return = 0;
+			exec( $cmd, $output, $return );
+
+			if ( 0 !== $return || empty( $output ) ) {
+				error_log( 'SRDT: Failed to list contents of tar.gz file: ' . implode( "\n", $output ) );
+				return;
+			}
+
+			$sql_filename = trim( $output[0] ); // Get the first (and should be only) file in the archive
+			$temp_sql_file = $source_dir . 'temp_' . $sql_filename;
+
+			// Extract the SQL file
+			$cmd = 'cd ' . escapeshellarg( $source_dir ) . ' && tar -xzf ' . escapeshellarg( basename( $file_path ) ) . ' -O > ' . escapeshellarg( $temp_sql_file ) . ' 2>&1';
+			$output = [];
+			$return = 0;
+			exec( $cmd, $output, $return );
+
+			if ( 0 !== $return ) {
+				error_log( 'SRDT: Failed to extract tar.gz database file: ' . implode( "\n", $output ) );
+				return;
+			}
+
+			if ( ! file_exists( $temp_sql_file ) || filesize( $temp_sql_file ) === 0 ) {
+				error_log( 'SRDT: Extracted SQL file is empty or does not exist: ' . $temp_sql_file );
+				return;
+			}
+
+			$sql_file_path = $temp_sql_file;
+		}
+
 		$import_ok = false;
 
 		// Prefer WP-CLI if available
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
-			\WP_CLI::runcommand( 'db import ' . escapeshellarg( $file_path ), [ 'return' => 'all', 'exit_error' => false ] );
+			\WP_CLI::runcommand( 'db import ' . escapeshellarg( $sql_file_path ), [ 'return' => 'all', 'exit_error' => false ] );
 			$import_ok = true; // If command returned, assume import attempted
 		}
 
@@ -937,43 +1068,46 @@ class SRDT_Sync_Posts {
 		if ( ! $import_ok ) {
 			if ( ! defined( 'DB_NAME' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_HOST' ) ) {
 				error_log( 'SRDT: Database constants missing; cannot perform import.' );
-				return;
-			}
+			} else {
+				$host   = DB_HOST;
+				$port   = null;
+				$socket = null;
+				if ( false !== strpos( $host, ':' ) ) {
+					list( $host_part, $extra ) = explode( ':', $host, 2 );
+					$host = $host_part;
+					if ( is_numeric( $extra ) ) {
+						$port = (int) $extra;
+					} else {
+						$socket = $extra;
+					}
+				}
 
-			$host   = DB_HOST;
-			$port   = null;
-			$socket = null;
-			if ( false !== strpos( $host, ':' ) ) {
-				list( $host_part, $extra ) = explode( ':', $host, 2 );
-				$host = $host_part;
-				if ( is_numeric( $extra ) ) {
-					$port = (int) $extra;
+				$cmd  = 'mysql';
+				$cmd .= ' -h ' . escapeshellarg( $host );
+				if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
+				if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
+				$cmd .= ' -u ' . escapeshellarg( DB_USER );
+				// Do not pass password on command line; use MYSQL_PWD environment variable instead.
+				$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' < ' . escapeshellarg( $sql_file_path ) . ' 2>&1';
+
+				$output = [];
+				$return = 0;
+				$env = null;
+				if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
+					$env = array_merge($_ENV, ['MYSQL_PWD' => DB_PASSWORD]);
+				}
+				exec( $cmd, $output, $return, $env );
+				if ( 0 !== $return ) {
+					error_log( 'SRDT: mysql import failed: ' . implode( "\n", $output ) );
 				} else {
-					$socket = $extra;
+					$import_ok = true;
 				}
 			}
+		}
 
-			$cmd  = 'mysql';
-			$cmd .= ' -h ' . escapeshellarg( $host );
-			if ( $port )   { $cmd .= ' -P ' . escapeshellarg( (string) $port ); }
-			if ( $socket ) { $cmd .= ' --socket=' . escapeshellarg( $socket ); }
-			$cmd .= ' -u ' . escapeshellarg( DB_USER );
-			// Do not pass password on command line; use MYSQL_PWD environment variable instead.
-			$cmd .= ' ' . escapeshellarg( DB_NAME ) . ' < ' . escapeshellarg( $file_path ) . ' 2>&1';
-
-			$output = [];
-			$return = 0;
-			$env = null;
-			if ( defined( 'DB_PASSWORD' ) && DB_PASSWORD !== '' ) {
-				$env = array_merge($_ENV, ['MYSQL_PWD' => DB_PASSWORD]);
-			}
-			exec( $cmd, $output, $return, $env );
-			if ( 0 !== $return ) {
-				error_log( 'SRDT: mysql import failed: ' . implode( "\n", $output ) );
-				return;
-			}
-
-			$import_ok = true;
+		// Clean up temporary SQL file if it was extracted
+		if ( $temp_sql_file && file_exists( $temp_sql_file ) ) {
+			@unlink( $temp_sql_file );
 		}
 
 		// Restore critical URLs
@@ -985,17 +1119,25 @@ class SRDT_Sync_Posts {
 	}
 
 	/**
-	 * Backup each plugin directory in wp-content/plugins into individual zip files
+	 * Backup each plugin directory in wp-content/plugins into individual tar.gz files
 	 * in the current theme's sync/plugins directory.
 	 *
 	 * @since 1.2.0
 	 * @param array $args       Positional CLI args (unused).
 	 * @param array $assoc_args Associative CLI args (unused).
-	 * @return int Number of plugin zip files created during this run.
+	 * @return int Number of plugin tar.gz files created during this run.
 	 */
 	public static function backup_plugins( $args = [], $assoc_args = [] ) {
+		// Check for production environment
+		if ( self::is_production_blocked() ) {
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				\WP_CLI::error( 'SR Dev Tools is not allowed in production environments.' );
+			}
+			return 0;
+		}
+
 		// Only allow via CLI or admins.
-		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'manage_options' ) ) {
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'SR' ) ) {
 			return 0;
 		}
 
@@ -1017,54 +1159,42 @@ class SRDT_Sync_Posts {
 			return 0;
 		}
 
-		$timestamp = gmdate( 'Ymd-His' );
-		$zip_available = class_exists( 'ZipArchive' );
+		// Check if tar command is available
+		$tar_available = false;
+		if ( function_exists( 'shell_exec' ) ) {
+			$which = @shell_exec( 'command -v tar 2>/dev/null' );
+			$tar_available = is_string( $which ) && trim( $which ) !== '';
+		}
+
+		if ( ! $tar_available ) {
+			error_log( 'SRDT: tar command not available for plugin backups' );
+			return 0;
+		}
+
 		$created_count = 0;
 
 		foreach ( $dirs as $dir ) {
 			$slug = basename( $dir );
-			$zip_path = $target_dir . $slug . '.zip';
+			$tar_path = $target_dir . $slug . '.tar.gz';
 
-			if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $zip_path ) ) {
-				error_log( 'SRDT: Unsafe plugins backup zip path detected: ' . $zip_path );
+			if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $tar_path ) ) {
+				error_log( 'SRDT: Unsafe plugins backup tar path detected: ' . $tar_path );
 				continue;
 			}
 
-			if ( $zip_available ) {
-				$zip = new ZipArchive();
-				if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
-					error_log( 'SRDT: Failed to create zip: ' . $zip_path );
-					continue;
-				}
-
-				$files = new RecursiveIteratorIterator(
-					new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
-					RecursiveIteratorIterator::LEAVES_ONLY
-				);
-				foreach ( $files as $name => $file ) {
-					if ( $file->isDir() ) {
-						continue;
-					}
-					$filepath  = $file->getRealPath();
-					$localname = $slug . '/' . substr( $filepath, strlen( trailingslashit( $dir ) ) );
-					$zip->addFile( $filepath, $localname );
-				}
-				$zip->close();
-				$created_count++;
-			} else {
-				// Fallback to system zip command
-				$cmd = 'cd ' . escapeshellarg( $plugins_root ) . ' && zip -r -q ' . escapeshellarg( $zip_path ) . ' ' . escapeshellarg( $slug ) . ' -x "*.DS_Store" 2>&1';
-				$output = [];
-				$return = 0;
-				exec( $cmd, $output, $return );
-				if ( 0 !== $return ) {
-					error_log( 'SRDT: zip command failed for ' . $slug . ': ' . implode( "\n", $output ) );
-					continue;
-				}
-				$created_count++;
+			// Use tar command to create compressed archive
+			$cmd = 'cd ' . escapeshellarg( $plugins_root ) . ' && tar -czf ' . escapeshellarg( $tar_path ) . ' --exclude="*.DS_Store" --exclude=".git" --exclude="*.tmp" --exclude="*.log" ' . escapeshellarg( $slug ) . ' 2>&1';
+			$output = [];
+			$return = 0;
+			exec( $cmd, $output, $return );
+			
+			if ( 0 !== $return ) {
+				error_log( 'SRDT: tar command failed for ' . $slug . ': ' . implode( "\n", $output ) );
+				continue;
 			}
 
-			do_action( 'srdt_after_backup_plugin', $zip_path, $dir );
+			$created_count++;
+			do_action( 'srdt_after_backup_plugin', $tar_path, $dir );
 		}
 
 		do_action( 'srdt_after_backup_plugins', $target_dir );
