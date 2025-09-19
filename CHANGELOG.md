@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.4.4
+
+- **Updated**: Version bump for new release
+
 ## 1.4.3
 
 - **Updated**: Version bump for new release
