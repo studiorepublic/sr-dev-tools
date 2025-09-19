@@ -233,7 +233,7 @@ function srdt_is_safe_file_path( $file_path ) {
  * @return array Result data including created/skipped counts and messages.
  */
 function srdt_generate_modules_pages() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'SR' ) ) {
 		return [ 'error' => __( 'Insufficient permissions.', 'srdt' ) ];
 	}
 
@@ -381,4 +381,31 @@ function srdt_acf_collect_partial_field_names( $data ) {
 	$walker( $data );
 
 	return $found;
+}
+
+/**
+ * Recursively remove a directory and all its contents.
+ * 
+ * @param string $dir The directory path to remove.
+ * 
+ * @since  1.0.0
+ * @return bool True on success, false on failure.
+ */
+function srdt_remove_directory_recursive( $dir ) {
+	if ( ! is_dir( $dir ) ) {
+		return false;
+	}
+	
+	$files = array_diff( scandir( $dir ), [ '.', '..' ] );
+	
+	foreach ( $files as $file ) {
+		$path = $dir . DIRECTORY_SEPARATOR . $file;
+		if ( is_dir( $path ) ) {
+			srdt_remove_directory_recursive( $path );
+		} else {
+			@unlink( $path );
+		}
+	}
+	
+	return @rmdir( $dir );
 }

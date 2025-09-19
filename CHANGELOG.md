@@ -1,14 +1,23 @@
 # CHANGELOG
 
+## 1.4.3
+
+- **Updated**: Version bump for new release
+
 ## 1.4.2
 
+- **Changed**: Plugin backups now use tar.gz format instead of zip for better compatibility
+- **Improved**: Replaced ZipArchive dependency with tar command for more reliable cross-platform support
+- **Added**: Additional file exclusions for plugin backups (*.tmp, *.log files)
+- **Updated**: Admin interface text to reflect tar.gz format
+- **Updated**: Plugin description and documentation to mention tar.gz archives
 - Enhanced: Database import functionality now restores current theme options (stylesheet and template) after import
 - Added: Theme restoration logic with fallback mechanisms and comprehensive logging
 - Improved: Database import process now preserves both site URLs and active theme configuration
 
 ## 1.4.1
 
-- Better zip file handling
+- Better tar.gz file handling for plugin backups
 
 ## 1.4.0
 

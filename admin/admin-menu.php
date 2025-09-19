@@ -22,7 +22,7 @@ function srdt_register_admin_menu() {
 	add_menu_page(
 		esc_html__( 'SR Dev Tools', 'srdt' ),
 		esc_html__( 'SR Dev Tools', 'srdt' ),
-		'manage_options',
+		'SR',
 		'sr-dev-tools',
 		'srdt_render_export_page',
 		'dashicons-download',
