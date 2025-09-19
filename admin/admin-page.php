@@ -278,6 +278,43 @@ function srdt_render_export_page() {
 		}
 	}
 
+	// Handle Delete All Plugin Backups action.
+	if ( isset( $_POST['srdt_delete_all_plugins'] ) && isset( $_POST['srdt_delete_all_plugins_nonce'] ) && wp_verify_nonce( $_POST['srdt_delete_all_plugins_nonce'], 'srdt_delete_all_plugins_action' ) ) {
+		if ( ! current_user_can( 'SR' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
+		}
+
+		$plugins_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
+		$plugin_files = is_dir( $plugins_dir ) ? glob( $plugins_dir . '*.tar.gz' ) : [];
+		
+		$deleted_count = 0;
+		$failed_count = 0;
+		
+		foreach ( $plugin_files as $plugin_file ) {
+			$dir_real  = realpath( $plugins_dir );
+			$file_real = is_file( $plugin_file ) ? realpath( $plugin_file ) : false;
+			if ( $dir_real && $file_real && strpos( $file_real, $dir_real ) === 0 && is_file( $file_real ) ) {
+				if ( @unlink( $file_real ) ) {
+					$deleted_count++;
+				} else {
+					$failed_count++;
+				}
+			} else {
+				$failed_count++;
+			}
+		}
+		
+		if ( $deleted_count > 0 ) {
+			echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Deleted %d plugin backup(s).', 'srdt' ), $deleted_count );
+			if ( $failed_count > 0 ) {
+				echo ' ' . sprintf( esc_html__( '%d file(s) could not be deleted.', 'srdt' ), $failed_count );
+			}
+			echo '</p></div>';
+		} else {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'No plugin backups were deleted.', 'srdt' ) . '</p></div>';
+		}
+	}
+
 	// Handle Download Plugin Backup action.
 	if ( isset( $_GET['srdt_download_plugin'] ) && isset( $_GET['srdt_download_plugin_nonce'] ) && wp_verify_nonce( $_GET['srdt_download_plugin_nonce'], 'srdt_download_plugin_action' ) ) {
 		if ( ! current_user_can( 'SR' ) ) {
@@ -398,21 +435,32 @@ function srdt_render_export_page() {
         if ( ! empty( $srdt_files ) ) {
             usort( $srdt_files, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
             echo '<h3>' . esc_html__( 'Available database dumps', 'srdt' ) . '</h3>';
-            echo '<ul class="srdt-dumps-list">';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead>';
+            echo '<tr>';
+            echo '<th scope="col">' . esc_html__( 'File Name', 'srdt' ) . '</th>';
+            echo '<th scope="col">' . esc_html__( 'Size', 'srdt' ) . '</th>';
+            echo '<th scope="col">' . esc_html__( 'Actions', 'srdt' ) . '</th>';
+            echo '</tr>';
+            echo '</thead>';
+            echo '<tbody>';
             foreach ( $srdt_files as $srdt_file ) {
                 $srdt_basename = basename( $srdt_file );
                 $srdt_size     = size_format( @filesize( $srdt_file ) );
-                $srdt_time     = date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), @filemtime( $srdt_file ) );
-                echo '<li>';
-                echo '<code>' . esc_html( $srdt_basename ) . '</code> <small>(' . esc_html( $srdt_size ) . ', ' . esc_html( $srdt_time ) . ')</small> ';
-                echo '<form method="post" style="display:inline;margin-left:8px;">';
+                echo '<tr>';
+                echo '<td><code>' . esc_html( $srdt_basename ) . '</code></td>';
+                echo '<td>' . esc_html( $srdt_size ) . '</td>';
+                echo '<td>';
+                echo '<form method="post" style="display:inline;">';
                 wp_nonce_field( 'srdt_delete_dump_action', 'srdt_delete_dump_nonce' );
                 echo '<input type="hidden" name="srdt_dump_file" value="' . esc_attr( $srdt_basename ) . '" />';
-                submit_button( esc_html__( 'Delete', 'srdt' ), 'link delete', 'srdt_delete_dump', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Delete this dump file?', 'srdt' ) ) . "');" ] );
+                submit_button( esc_html__( 'Delete', 'srdt' ), 'button-secondary button-small', 'srdt_delete_dump', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Delete this dump file?', 'srdt' ) ) . "');" ] );
                 echo '</form>';
-                echo '</li>';
+                echo '</td>';
+                echo '</tr>';
             }
-            echo '</ul>';
+            echo '</tbody>';
+            echo '</table>';
         } else {
             echo '<p>' . esc_html__( 'No database dump files found.', 'srdt' ) . '</p>';
         }
@@ -440,16 +488,31 @@ function srdt_render_export_page() {
             usort( $plugin_files, function( $a, $b ) { return filemtime( $b ) <=> filemtime( $a ); } );
             echo '<h3>' . esc_html__( 'Available plugin backups', 'srdt' ) . '</h3>';
             
-            // Add "Download All" button
+            // Add bulk action buttons
+            echo '<div style="margin-bottom: 10px;">';
             if ( count( $plugin_files ) > 1 ) {
-                echo '<p><button type="button" id="srdt-download-all-plugins" class="button button-secondary">' . esc_html__( 'Download All Plugin Backups', 'srdt' ) . '</button></p>';
+                echo '<button type="button" id="srdt-download-all-plugins" class="button button-secondary" style="margin-right: 10px;">' . esc_html__( 'Download All', 'srdt' ) . '</button>';
             }
+            if ( count( $plugin_files ) > 0 ) {
+                echo '<form method="post" style="display:inline;">';
+                wp_nonce_field( 'srdt_delete_all_plugins_action', 'srdt_delete_all_plugins_nonce' );
+                submit_button( esc_html__( 'Delete All Plugin Backups', 'srdt' ), 'button-secondary', 'srdt_delete_all_plugins', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Are you sure you want to delete ALL plugin backups? This action cannot be undone.', 'srdt' ) ) . "');" ] );
+                echo '</form>';
+            }
+            echo '</div>';
             
-            echo '<ul class="srdt-plugins-list">';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead>';
+            echo '<tr>';
+            echo '<th scope="col">' . esc_html__( 'File Name', 'srdt' ) . '</th>';
+            echo '<th scope="col">' . esc_html__( 'Size', 'srdt' ) . '</th>';
+            echo '<th scope="col">' . esc_html__( 'Actions', 'srdt' ) . '</th>';
+            echo '</tr>';
+            echo '</thead>';
+            echo '<tbody>';
             foreach ( $plugin_files as $plugin_file ) {
                 $plugin_basename = basename( $plugin_file );
                 $plugin_size     = size_format( @filesize( $plugin_file ) );
-                $plugin_time     = date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), @filemtime( $plugin_file ) );
                 
                 // Create download URL
                 $download_url = add_query_arg( [
@@ -458,17 +521,21 @@ function srdt_render_export_page() {
                     'srdt_download_plugin_nonce' => wp_create_nonce( 'srdt_download_plugin_action' )
                 ] );
                 
-                echo '<li>';
-                echo '<code>' . esc_html( $plugin_basename ) . '</code> <small>(' . esc_html( $plugin_size ) . ', ' . esc_html( $plugin_time ) . ')</small> ';
-                echo '<a href="' . esc_url( $download_url ) . '" class="button button-small srdt-download-plugin" data-filename="' . esc_attr( $plugin_basename ) . '">' . esc_html__( 'Download', 'srdt' ) . '</a> ';
-                echo '<form method="post" style="display:inline;margin-left:8px;">';
+                echo '<tr>';
+                echo '<td><code>' . esc_html( $plugin_basename ) . '</code></td>';
+                echo '<td>' . esc_html( $plugin_size ) . '</td>';
+                echo '<td>';
+                echo '<a href="' . esc_url( $download_url ) . '" class="button button-secondary button-small srdt-download-plugin" data-filename="' . esc_attr( $plugin_basename ) . '" style="margin-right: 5px;">' . esc_html__( 'Download', 'srdt' ) . '</a>';
+                echo '<form method="post" style="display:inline;">';
                 wp_nonce_field( 'srdt_delete_plugin_action', 'srdt_delete_plugin_nonce' );
                 echo '<input type="hidden" name="srdt_plugin_file" value="' . esc_attr( $plugin_basename ) . '" />';
-                submit_button( esc_html__( 'Delete', 'srdt' ), 'link delete', 'srdt_delete_plugin', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Delete this plugin backup?', 'srdt' ) ) . "');" ] );
+                submit_button( esc_html__( 'Delete', 'srdt' ), 'button-secondary button-small', 'srdt_delete_plugin', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Delete this plugin backup?', 'srdt' ) ) . "');" ] );
                 echo '</form>';
-                echo '</li>';
+                echo '</td>';
+                echo '</tr>';
             }
-            echo '</ul>';
+            echo '</tbody>';
+            echo '</table>';
         } else {
             echo '<p>' . esc_html__( 'No plugin backup files found.', 'srdt' ) . '</p>';
         }

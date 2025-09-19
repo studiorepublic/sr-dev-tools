@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 1.5.0
+
+- **Added**: Tabular layout for database dumps and plugin backups with proper WordPress admin styling
+- **Added**: "Delete All Plugin Backups" functionality with confirmation dialog
+- **Improved**: Consistent button styling using WordPress admin classes throughout the interface
+- **Improved**: Simplified table layout by removing date created columns for cleaner presentation
+- **Enhanced**: Better visual organization with proper table headers (File Name, Size, Actions)
+- **Enhanced**: Bulk action buttons for plugin backups (Download All, Delete All)
+
 ## 1.4.4
 
 - **Updated**: Version bump for new release
