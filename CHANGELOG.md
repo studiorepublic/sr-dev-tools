@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.4.3
+
+- **Updated**: Version bump for new release
+
 ## 1.4.2
 
 - **Changed**: Plugin backups now use tar.gz format instead of zip for better compatibility
