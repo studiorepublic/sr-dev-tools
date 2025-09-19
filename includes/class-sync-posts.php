@@ -910,6 +910,20 @@ class SRDT_Sync_Posts {
 			return false;
 		}
 
+		// Unzip if the file is a ZIP archive
+		if ( substr( $file_path, -4 ) === '.zip' ) {
+			$zip = new ZipArchive();
+			if ( $zip->open( $file_path ) === true ) {
+				$extracted_path = trailingslashit( dirname( $file_path ) ) . $zip->getNameIndex( 0 );
+				$zip->extractTo( dirname( $file_path ) );
+				$zip->close();
+				$file_path = $extracted_path;
+			} else {
+				error_log( 'SRDT: Failed to unzip database dump file: ' . $file_path );
+				return false;
+			}
+		}
+
 		// Validate the SQL file
 		$file_info = self::validate_sql_file( $file_path );
 		if ( ! $file_info['valid'] ) {
