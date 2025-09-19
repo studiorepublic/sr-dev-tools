@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.4.3
+
+- Version bump for new release
+
 ## 1.4.2
 
 - Enhanced: Database import functionality now restores current theme options (stylesheet and template) after import

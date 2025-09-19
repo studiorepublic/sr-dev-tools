@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="WEB_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/vendor/composer" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/plugin-update-checker/Puc" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/plugin-update-checker/css" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/plugin-update-checker/js" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/plugin-update-checker/languages" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/plugin-update-checker/vendor" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/robertdevore/wpcom-check" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
