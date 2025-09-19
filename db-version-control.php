@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: SR Dev Tools
- * Description: Sync WordPress to version-controlled JSON files for easy Git workflows. Manage database dumps and plugin zip exports
+ * Description: Sync WordPress to version-controlled JSON files for easy Git workflows. Manage database dumps and plugin tar.gz archives
  * Version:     1.4.3
  * Author:      Studio Republic (based on original plugin by Robert DeVore)
  * Author URI:  https://www.studiorepublic.com

@@ -2,7 +2,7 @@
 
 **Sync WordPress to version-controlled JSON files for easy Git workflows.**<br>
 **Export and import database**<br>
-**Export plugins to zip files**
+**Export plugins to tar.gz archives**
 
 
 
@@ -298,7 +298,7 @@ add_filter( 'srdt_skip_meta_keys', function( $skip_keys ) {
 ### Security
 - **File Permissions**: Ensure proper write permissions for sync directory
 - **Sensitive Data**: Some options are automatically excluded (API keys, salts, etc.)
-- **Access Control**: Only users with `manage_options` capability can export/import
+- **Access Control**: Only users with `SR` capability can export/import
 
 ### Performance
 - **Large Sites**: Batch processing automatically handles large datasets efficiently
