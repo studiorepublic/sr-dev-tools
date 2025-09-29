@@ -6,5 +6,4 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
-    'RobertDevore\\WPComCheck\\' => array($vendorDir . '/robertdevore/wpcom-check/src'),
 );

@@ -19,12 +19,12 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
-        'robertdevore/wpcom-check' => array(
-            'pretty_version' => '1.0.1',
-            'version' => '1.0.1.0',
-            'reference' => '25eb61d7e0fbd4b2a87a81c3fa7dca722f8d8058',
+        'yahnis-elsts/plugin-update-checker' => array(
+            'pretty_version' => 'v5.6',
+            'version' => '5.6.0.0',
+            'reference' => 'a2db6871deec989a74e1f90fafc6d58ae526a879',
             'type' => 'library',
-            'install_path' => __DIR__ . '/../robertdevore/wpcom-check',
+            'install_path' => __DIR__ . '/../yahnis-elsts/plugin-update-checker',
             'aliases' => array(),
             'dev_requirement' => false,
         ),

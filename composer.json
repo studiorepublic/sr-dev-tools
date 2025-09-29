@@ -1,5 +1,5 @@
 {
     "require": {
-        "robertdevore/wpcom-check": "^1.0"
+        "yahnis-elsts/plugin-update-checker": "^5.6"
     }
 }

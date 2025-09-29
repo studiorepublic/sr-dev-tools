@@ -1,33 +1,31 @@
 {
     "packages": [
         {
-            "name": "robertdevore/wpcom-check",
-            "version": "1.0.1",
-            "version_normalized": "1.0.1.0",
+            "name": "yahnis-elsts/plugin-update-checker",
+            "version": "v5.6",
+            "version_normalized": "5.6.0.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/robertdevore/wpcom-check.git",
-                "reference": "25eb61d7e0fbd4b2a87a81c3fa7dca722f8d8058"
+                "url": "https://github.com/YahnisElsts/plugin-update-checker.git",
+                "reference": "a2db6871deec989a74e1f90fafc6d58ae526a879"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/robertdevore/wpcom-check/zipball/25eb61d7e0fbd4b2a87a81c3fa7dca722f8d8058",
-                "reference": "25eb61d7e0fbd4b2a87a81c3fa7dca722f8d8058",
+                "url": "https://api.github.com/repos/YahnisElsts/plugin-update-checker/zipball/a2db6871deec989a74e1f90fafc6d58ae526a879",
+                "reference": "a2db6871deec989a74e1f90fafc6d58ae526a879",
                 "shasum": ""
             },
             "require": {
-                "php": ">=7.4"
+                "ext-json": "*",
+                "php": ">=5.6.20"
             },
-            "time": "2025-01-07T17:17:53+00:00",
+            "time": "2025-05-20T12:29:01+00:00",
             "type": "library",
-            "extra": {
-                "wordpress-plugin": true
-            },
             "installation-source": "dist",
             "autoload": {
-                "psr-4": {
-                    "RobertDevore\\WPComCheck\\": "src/"
-                }
+                "files": [
+                    "load-v5p6.php"
+                ]
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
@@ -35,26 +33,25 @@
             ],
             "authors": [
                 {
-                    "name": "Robert DeVore",
-                    "email": "me@robertdevore.com",
-                    "homepage": "https://github.com/robertdevore",
+                    "name": "Yahnis Elsts",
+                    "email": "whiteshadow@w-shadow.com",
+                    "homepage": "https://w-shadow.com/",
                     "role": "Developer"
                 }
             ],
-            "description": "A utility to handle WordPress.com-specific plugin compatibility and auto-deactivation.",
-            "homepage": "https://github.com/robertdevore/wpcom-check",
+            "description": "A custom update checker for WordPress plugins and themes. Useful if you can't host your plugin in the official WP repository but still want it to support automatic updates.",
+            "homepage": "https://github.com/YahnisElsts/plugin-update-checker/",
             "keywords": [
-                "compatibility",
-                "deactivation",
-                "plugin",
-                "wordpress",
-                "wordpress.com"
+                "automatic updates",
+                "plugin updates",
+                "theme updates",
+                "wordpress"
             ],
             "support": {
-                "issues": "https://github.com/robertdevore/wpcom-check/issues",
-                "source": "https://github.com/robertdevore/wpcom-check/tree/1.0.1"
+                "issues": "https://github.com/YahnisElsts/plugin-update-checker/issues",
+                "source": "https://github.com/YahnisElsts/plugin-update-checker/tree/v5.6"
             },
-            "install-path": "../robertdevore/wpcom-check"
+            "install-path": "../yahnis-elsts/plugin-update-checker"
         }
     ],
     "dev": true,

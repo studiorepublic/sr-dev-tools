@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SR Dev Tools
  * Description: Sync WordPress to version-controlled JSON files for easy Git workflows. Manage database dumps and plugin tar.gz archives
- * Version:     1.5.0
+ * Version:     1.5.1
  * Author:      Studio Republic (based on original plugin by Robert DeVore)
  * Author URI:  https://www.studiorepublic.com
  * Text Domain: srdt
@@ -16,7 +16,7 @@ if ( ! defined( 'WPINC' ) ) {
     die;
 }
 
-require 'vendor/plugin-update-checker/plugin-update-checker.php';
+require 'vendor/autoload.php';
 use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
 
 $myUpdateChecker = PucFactory::buildUpdateChecker(
@@ -29,19 +29,19 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 $myUpdateChecker->setBranch( 'main' );
 
 // Check if Composer's autoloader is already registered globally.
-if ( ! class_exists( 'RobertDevore\WPComCheck\WPComPluginHandler' ) ) {
-    require_once __DIR__ . '/vendor/autoload.php';
-}
+//if ( ! class_exists( 'RobertDevore\WPComCheck\WPComPluginHandler' ) ) {
+//    require_once __DIR__ . '/vendor/autoload.php';
+//}
 
-use RobertDevore\WPComCheck\WPComPluginHandler;
+//use RobertDevore\WPComCheck\WPComPluginHandler;
 
-new WPComPluginHandler( plugin_basename( __FILE__ ), 'https://robertdevore.com/why-this-plugin-doesnt-support-wordpress-com-hosting/' );
+//new WPComPluginHandler( plugin_basename( __FILE__ ), 'https://robertdevore.com/why-this-plugin-doesnt-support-wordpress-com-hosting/' );
 
 // Define constants for the plugin.
 define( 'SRDT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'SRDT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SRDT_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
-define( 'SRDT_PLUGIN_VERSION', '1.5.0' );
+define( 'SRDT_PLUGIN_VERSION', '1.5.1' );
 
 require_once SRDT_PLUGIN_PATH . 'includes/functions.php';
 require_once SRDT_PLUGIN_PATH . 'includes/class-sync-posts.php';

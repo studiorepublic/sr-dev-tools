@@ -4,20 +4,10 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitca9049066c1270338606f5739f59d5ab
+class ComposerStaticInit88bd1240a06e12371573341aa3549092
 {
-    public static $prefixLengthsPsr4 = array (
-        'R' => 
-        array (
-            'RobertDevore\\WPComCheck\\' => 24,
-        ),
-    );
-
-    public static $prefixDirsPsr4 = array (
-        'RobertDevore\\WPComCheck\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/robertdevore/wpcom-check/src',
-        ),
+    public static $files = array (
+        'f6d4f6bcee7247df6b777884c3e22f98' => __DIR__ . '/..' . '/yahnis-elsts/plugin-update-checker/load-v5p6.php',
     );
 
     public static $classMap = array (
@@ -27,9 +17,7 @@ class ComposerStaticInitca9049066c1270338606f5739f59d5ab
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInitca9049066c1270338606f5739f59d5ab::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInitca9049066c1270338606f5739f59d5ab::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInitca9049066c1270338606f5739f59d5ab::$classMap;
+            $loader->classMap = ComposerStaticInit88bd1240a06e12371573341aa3549092::$classMap;
 
         }, null, ClassLoader::class);
     }
