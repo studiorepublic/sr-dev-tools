@@ -169,4 +169,84 @@ class SRDT_WP_CLI_Commands {
 			) );
 		}
 	}
+
+	/**
+	 * Generate module pages based on ACF field names starting with "Partial".
+	 *
+	 * Scans the current theme's acf-json directory for ACF field groups and creates
+	 * child pages under a "Modules" parent page for each field starting with "Partial".
+	 *
+	 * ## EXAMPLES
+	 * wp srdt generate-modules
+     * 
+     * @since  1.6.1
+     * @return void
+	 */
+	public function generate_modules( $args, $assoc_args ) {
+		WP_CLI::log( 'Scanning ACF field groups for Partial fields...' );
+		
+		$results = srdt_generate_modules_pages();
+		
+		// Check for errors
+		if ( isset( $results['error'] ) ) {
+			WP_CLI::error( $results['error'] );
+			return;
+		}
+		
+		// Display results
+		$created_count = isset( $results['created'] ) ? count( $results['created'] ) : 0;
+		$skipped_count = isset( $results['skipped'] ) ? count( $results['skipped'] ) : 0;
+		$errors_count  = isset( $results['errors'] ) ? count( $results['errors'] ) : 0;
+		$partials_count = isset( $results['partials'] ) ? count( $results['partials'] ) : 0;
+		
+		// Modules page status
+		if ( ! empty( $results['modules_page_created'] ) ) {
+			WP_CLI::log( '✓ Created "Modules" parent page' );
+		} else {
+			WP_CLI::log( '✓ "Modules" parent page already exists' );
+		}
+		
+		// Found partials
+		WP_CLI::log( sprintf( 'Found %d Partial field(s) in ACF JSON files', $partials_count ) );
+		
+		// Created pages
+		if ( $created_count > 0 ) {
+			WP_CLI::log( sprintf( '✓ Created %d new page(s):', $created_count ) );
+			foreach ( $results['created'] as $page_name ) {
+				WP_CLI::log( '  - ' . $page_name );
+			}
+		}
+		
+		// Skipped pages
+		if ( $skipped_count > 0 ) {
+			WP_CLI::log( sprintf( '⊘ Skipped %d existing page(s):', $skipped_count ) );
+			foreach ( $results['skipped'] as $page_name ) {
+				WP_CLI::log( '  - ' . $page_name );
+			}
+		}
+		
+		// Errors
+		if ( $errors_count > 0 ) {
+			WP_CLI::warning( sprintf( 'Encountered %d error(s):', $errors_count ) );
+			foreach ( $results['errors'] as $error ) {
+				WP_CLI::warning( '  - ' . $error );
+			}
+		}
+		
+		// Final summary
+		if ( $errors_count > 0 ) {
+			WP_CLI::warning( sprintf( 
+				'Module pages generation completed with errors. Created: %d, Skipped: %d, Errors: %d',
+				$created_count,
+				$skipped_count,
+				$errors_count
+			) );
+		} else {
+			WP_CLI::success( sprintf( 
+				'Module pages generation completed! Created: %d, Skipped: %d',
+				$created_count,
+				$skipped_count
+			) );
+		}
+	}
 }

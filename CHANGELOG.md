@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.6.1
+
+- **Added**: WP-CLI command `wp srdt generate-modules` to generate module pages from ACF Partial fields
+- **Enhanced**: CLI functionality now matches all admin interface features
+- **Improved**: Detailed output for module generation including created, skipped, and error counts
+- **Documentation**: Added WP-CLI commands documentation
+
 ## 1.6.0
 
 - **Added**: Plugin installation functionality from tar.gz archives
