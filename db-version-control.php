@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SR Dev Tools
  * Description: Sync WordPress to version-controlled JSON files for easy Git workflows. Manage database dumps and plugin tar.gz archives
- * Version:     1.5.2
+ * Version:     1.6.0
  * Author:      Studio Republic (based on original plugin by Robert DeVore)
  * Author URI:  https://www.studiorepublic.com
  * Text Domain: srdt
@@ -41,7 +41,7 @@ $myUpdateChecker->setBranch( 'main' );
 define( 'SRDT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'SRDT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'SRDT_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
-define( 'SRDT_PLUGIN_VERSION', '1.5.2' );
+define( 'SRDT_PLUGIN_VERSION', '1.6.0' );
 
 require_once SRDT_PLUGIN_PATH . 'includes/functions.php';
 require_once SRDT_PLUGIN_PATH . 'includes/class-sync-posts.php';

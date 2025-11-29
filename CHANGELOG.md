@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 1.6.0
+
+- **Added**: Plugin installation functionality from tar.gz archives
+- **Added**: "Install All Plugins" button to install all plugin backups at once
+- **Added**: Individual "Install" button for each plugin backup in the list
+- **Added**: `install_plugin_from_archive()` method in SRDT_Sync_Posts class for single plugin installation
+- **Added**: `install_all_plugins()` method in SRDT_Sync_Posts class for bulk plugin installation
+- **Added**: WP-CLI command `wp srdt install-plugins` for command-line plugin installation
+- **Enhanced**: Plugin installation with comprehensive error handling and validation
+- **Enhanced**: Installation skips plugins that already exist to prevent conflicts
+- **Improved**: User feedback with detailed success/failure/skipped counts and messages
+- **Security**: All installation operations require 'SR' capability and include nonce verification
+- **Security**: File path validation to prevent directory traversal attacks
+
 ## 1.5.0
 
 - **Added**: Tabular layout for database dumps and plugin backups with proper WordPress admin styling

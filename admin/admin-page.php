@@ -366,6 +366,67 @@ function srdt_render_export_page() {
 		echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Created %d plugin tar.gz backup(s) in %s', 'srdt' ), (int) $created, '<code>' . esc_html( $plugins_target ) . '</code>' ) . '</p></div>';
 	}
 
+	// Handle Install Plugin action.
+	if ( isset( $_POST['srdt_install_plugin'] ) && isset( $_POST['srdt_install_plugin_nonce'] ) && wp_verify_nonce( $_POST['srdt_install_plugin_nonce'], 'srdt_install_plugin_action' ) ) {
+		if ( ! current_user_can( 'SR' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
+		}
+
+		$plugins_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
+		$plugin_file = isset( $_POST['srdt_plugin_file'] ) ? sanitize_text_field( wp_unslash( $_POST['srdt_plugin_file'] ) ) : '';
+		$plugin_file = basename( $plugin_file ); // prevent traversal
+
+		if ( empty( $plugin_file ) || ! preg_match( '/\.tar\.gz$/i', $plugin_file ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Invalid plugin backup file specified.', 'srdt' ) . '</p></div>';
+		} else {
+			$full_path = $plugins_dir . $plugin_file;
+			$dir_real  = realpath( $plugins_dir );
+			$file_real = is_file( $full_path ) ? realpath( $full_path ) : false;
+			if ( $dir_real && $file_real && strpos( $file_real, $dir_real ) === 0 && is_file( $file_real ) ) {
+				$result = SRDT_Sync_Posts::install_plugin_from_archive( $file_real );
+				if ( $result['success'] ) {
+					echo '<div class="notice notice-success"><p>' . esc_html( $result['message'] ) . '</p></div>';
+				} else {
+					echo '<div class="notice notice-error"><p>' . esc_html( $result['message'] ) . '</p></div>';
+				}
+			} else {
+				echo '<div class="notice notice-error"><p>' . esc_html__( 'Plugin backup file not found or invalid path.', 'srdt' ) . '</p></div>';
+			}
+		}
+	}
+
+	// Handle Install All Plugins action.
+	if ( isset( $_POST['srdt_install_all_plugins'] ) && isset( $_POST['srdt_install_all_plugins_nonce'] ) && wp_verify_nonce( $_POST['srdt_install_all_plugins_nonce'], 'srdt_install_all_plugins_action' ) ) {
+		if ( ! current_user_can( 'SR' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to perform this action.', 'srdt' ) );
+		}
+
+		$results = SRDT_Sync_Posts::install_all_plugins();
+		
+		if ( $results['success'] > 0 || $results['skipped'] > 0 || $results['failed'] > 0 ) {
+			$summary = sprintf(
+				esc_html__( 'Plugin installation complete. Success: %d, Skipped: %d, Failed: %d', 'srdt' ),
+				$results['success'],
+				$results['skipped'],
+				$results['failed']
+			);
+			
+			$notice_type = $results['failed'] > 0 ? 'notice-warning' : 'notice-success';
+			echo '<div class="notice ' . esc_attr( $notice_type ) . '"><p>' . esc_html( $summary ) . '</p>';
+			
+			if ( ! empty( $results['messages'] ) ) {
+				echo '<ul style="margin: .5em 0 0 1.2em;">';
+				foreach ( $results['messages'] as $message ) {
+					echo '<li>' . esc_html( $message ) . '</li>';
+				}
+				echo '</ul>';
+			}
+			echo '</div>';
+		} else {
+			echo '<div class="notice notice-info"><p>' . esc_html__( 'No plugins were installed.', 'srdt' ) . '</p></div>';
+		}
+	}
+
 	// Get the current resolved path for display.
 	$resolved_path = srdt_get_sync_path();
 		
@@ -490,6 +551,13 @@ function srdt_render_export_page() {
             
             // Add bulk action buttons
             echo '<div style="margin-bottom: 10px;">';
+            // Install All button
+            if ( count( $plugin_files ) > 0 ) {
+                echo '<form method="post" style="display:inline; margin-right: 10px;">';
+                wp_nonce_field( 'srdt_install_all_plugins_action', 'srdt_install_all_plugins_nonce' );
+                submit_button( esc_html__( 'Install All Plugins', 'srdt' ), 'button-primary', 'srdt_install_all_plugins', false, [ 'onclick' => "return confirm('" . esc_js( __( 'This will install all plugin backups. Existing plugins with the same name will be skipped. Continue?', 'srdt' ) ) . "');" ] );
+                echo '</form>';
+            }
             if ( count( $plugin_files ) > 1 ) {
                 echo '<button type="button" id="srdt-download-all-plugins" class="button button-secondary" style="margin-right: 10px;">' . esc_html__( 'Download All', 'srdt' ) . '</button>';
             }
@@ -525,6 +593,11 @@ function srdt_render_export_page() {
                 echo '<td><code>' . esc_html( $plugin_basename ) . '</code></td>';
                 echo '<td>' . esc_html( $plugin_size ) . '</td>';
                 echo '<td>';
+                echo '<form method="post" style="display:inline; margin-right: 5px;">';
+                wp_nonce_field( 'srdt_install_plugin_action', 'srdt_install_plugin_nonce' );
+                echo '<input type="hidden" name="srdt_plugin_file" value="' . esc_attr( $plugin_basename ) . '" />';
+                submit_button( esc_html__( 'Install', 'srdt' ), 'button-primary button-small', 'srdt_install_plugin', false, [ 'onclick' => "return confirm('" . esc_js( __( 'Install this plugin? If a plugin with the same name exists, it will be skipped.', 'srdt' ) ) . "');" ] );
+                echo '</form>';
                 echo '<a href="' . esc_url( $download_url ) . '" class="button button-secondary button-small srdt-download-plugin" data-filename="' . esc_attr( $plugin_basename ) . '" style="margin-right: 5px;">' . esc_html__( 'Download', 'srdt' ) . '</a>';
                 echo '<form method="post" style="display:inline;">';
                 wp_nonce_field( 'srdt_delete_plugin_action', 'srdt_delete_plugin_nonce' );

@@ -1202,6 +1202,182 @@ class SRDT_Sync_Posts {
 	}
 
 	/**
+	 * Install a plugin from a tar.gz archive.
+	 *
+	 * @since 1.3.0
+	 * @param string $tar_path Full path to the tar.gz plugin archive.
+	 * @return array Result with 'success' boolean and 'message' string.
+	 */
+	public static function install_plugin_from_archive( $tar_path ) {
+		// Check for production environment
+		if ( self::is_production_blocked() ) {
+			return [
+				'success' => false,
+				'message' => __( 'SR Dev Tools is not allowed in production environments.', 'srdt' ),
+			];
+		}
+
+		// Only allow via CLI or admins.
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'SR' ) ) {
+			return [
+				'success' => false,
+				'message' => __( 'Insufficient permissions.', 'srdt' ),
+			];
+		}
+
+		// Validate file path
+		if ( function_exists( 'srdt_is_safe_file_path' ) && ! srdt_is_safe_file_path( $tar_path ) ) {
+			return [
+				'success' => false,
+				'message' => __( 'Unsafe file path detected.', 'srdt' ),
+			];
+		}
+
+		// Check if file exists
+		if ( ! file_exists( $tar_path ) || ! is_file( $tar_path ) ) {
+			return [
+				'success' => false,
+				'message' => __( 'Plugin archive file not found.', 'srdt' ),
+			];
+		}
+
+		// Check if tar command is available
+		$tar_available = false;
+		if ( function_exists( 'shell_exec' ) ) {
+			$which = @shell_exec( 'command -v tar 2>/dev/null' );
+			$tar_available = is_string( $which ) && trim( $which ) !== '';
+		}
+
+		if ( ! $tar_available ) {
+			return [
+				'success' => false,
+				'message' => __( 'tar command not available for plugin installation.', 'srdt' ),
+			];
+		}
+
+		$plugins_root = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : WP_CONTENT_DIR . '/plugins';
+		if ( ! is_dir( $plugins_root ) || ! is_writable( $plugins_root ) ) {
+			return [
+				'success' => false,
+				'message' => __( 'Plugins directory is not writable.', 'srdt' ),
+			];
+		}
+
+		$plugin_slug = basename( $tar_path, '.tar.gz' );
+		$plugin_dir = trailingslashit( $plugins_root ) . $plugin_slug;
+
+		// Check if plugin already exists
+		if ( is_dir( $plugin_dir ) ) {
+			return [
+				'success' => false,
+				'message' => sprintf( __( 'Plugin "%s" already exists. Please delete it first.', 'srdt' ), $plugin_slug ),
+			];
+		}
+
+		// Extract the tar.gz file
+		$cmd = 'cd ' . escapeshellarg( $plugins_root ) . ' && tar -xzf ' . escapeshellarg( $tar_path ) . ' 2>&1';
+		$output = [];
+		$return = 0;
+		exec( $cmd, $output, $return );
+
+		if ( 0 !== $return ) {
+			error_log( 'SRDT: tar extraction failed for ' . $plugin_slug . ': ' . implode( "\n", $output ) );
+			return [
+				'success' => false,
+				'message' => sprintf( __( 'Failed to extract plugin "%s". Check error logs.', 'srdt' ), $plugin_slug ),
+			];
+		}
+
+		// Verify extraction was successful
+		if ( ! is_dir( $plugin_dir ) ) {
+			return [
+				'success' => false,
+				'message' => sprintf( __( 'Plugin "%s" was not extracted successfully.', 'srdt' ), $plugin_slug ),
+			];
+		}
+
+		do_action( 'srdt_after_install_plugin', $plugin_dir, $tar_path );
+
+		return [
+			'success' => true,
+			'message' => sprintf( __( 'Plugin "%s" installed successfully.', 'srdt' ), $plugin_slug ),
+		];
+	}
+
+	/**
+	 * Install all plugins from tar.gz archives in the theme's sync/plugins directory.
+	 *
+	 * @since 1.3.0
+	 * @param array $args       Positional CLI args (unused).
+	 * @param array $assoc_args Associative CLI args (unused).
+	 * @return array Results with counts and messages.
+	 */
+	public static function install_all_plugins( $args = [], $assoc_args = [] ) {
+		// Check for production environment
+		if ( self::is_production_blocked() ) {
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				\WP_CLI::error( 'SR Dev Tools is not allowed in production environments.' );
+			}
+			return [
+				'success' => 0,
+				'failed' => 0,
+				'skipped' => 0,
+				'messages' => [ __( 'SR Dev Tools is not allowed in production environments.', 'srdt' ) ],
+			];
+		}
+
+		// Only allow via CLI or admins.
+		if ( ( ! defined( 'WP_CLI' ) || ! WP_CLI ) && ! current_user_can( 'SR' ) ) {
+			return [
+				'success' => 0,
+				'failed' => 0,
+				'skipped' => 0,
+				'messages' => [ __( 'Insufficient permissions.', 'srdt' ) ],
+			];
+		}
+
+		$plugins_dir = trailingslashit( get_stylesheet_directory() ) . 'sync/plugins/';
+		$plugin_files = is_dir( $plugins_dir ) ? glob( $plugins_dir . '*.tar.gz' ) : [];
+
+		if ( empty( $plugin_files ) ) {
+			return [
+				'success' => 0,
+				'failed' => 0,
+				'skipped' => 0,
+				'messages' => [ __( 'No plugin archives found to install.', 'srdt' ) ],
+			];
+		}
+
+		$results = [
+			'success' => 0,
+			'failed' => 0,
+			'skipped' => 0,
+			'messages' => [],
+		];
+
+		foreach ( $plugin_files as $plugin_file ) {
+			$result = self::install_plugin_from_archive( $plugin_file );
+			
+			if ( $result['success'] ) {
+				$results['success']++;
+			} else {
+				// Check if it was skipped (already exists) or failed
+				if ( strpos( $result['message'], 'already exists' ) !== false ) {
+					$results['skipped']++;
+				} else {
+					$results['failed']++;
+				}
+			}
+			
+			$results['messages'][] = $result['message'];
+		}
+
+		do_action( 'srdt_after_install_all_plugins', $results );
+
+		return $results;
+	}
+
+	/**
 	 * Pure-PHP database exporter used when CLI tools are unavailable.
 	 *
 	 * @since 1.2.1
@@ -1314,4 +1490,5 @@ if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
 	\WP_CLI::add_command( 'srdt dump-db', [ 'SRDT_Sync_Posts', 'dump_database' ] );
 	\WP_CLI::add_command( 'srdt import-db', [ 'SRDT_Sync_Posts', 'import_database' ] );
 	\WP_CLI::add_command( 'srdt backup-plugins', [ 'SRDT_Sync_Posts', 'backup_plugins' ] );
+	\WP_CLI::add_command( 'srdt install-plugins', [ 'SRDT_Sync_Posts', 'install_all_plugins' ] );
 }
